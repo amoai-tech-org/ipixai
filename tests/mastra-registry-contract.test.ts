@@ -84,8 +84,11 @@ describe("IPI-1208 · PLANNER-TOOLGATE-001 — the gate is APPLIED to the produc
   it("does not remove approveDraft/startBrandAnalysis from the agent instruction text", () => {
     // Read the source to confirm the agent instructions still mention
     // brand-intelligence tools (they are just gated per-turn, not removed).
+    // IPI-1346 · PLANNER-AGENT-STRUCTURE-001 moved the prompt text out of
+    // `agents/index.ts` (now a compatibility barrel), so this reads the
+    // instructions owner. The assertion is unchanged.
     const source = readFileSync(
-      new URL("../src/mastra/agents/index.ts", import.meta.url),
+      new URL("../src/mastra/agents/production-planner-instructions.ts", import.meta.url),
       "utf8",
     );
     expect(source).toMatch(/approveDraft/);
