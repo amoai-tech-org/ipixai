@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
@@ -494,24 +494,30 @@ describe("Playwright E2E harness hardening", () => {
       ]),
     );
 
-    const result = spawnSync(
-      process.execPath,
-      ["scripts/init-playwright-test-agents.mjs"],
-      {
-        cwd: process.cwd(),
-        encoding: "utf8",
-        env: { ...process.env, CI: "1" },
-      },
-    );
-
-    expect(
-      result.status,
-      `initializer failed:\n${result.stderr || result.stdout}`,
-    ).toBe(0);
-    for (const file of managed) {
-      expect(readFileSync(path.resolve(process.cwd(), file))).toEqual(
-        before.get(file),
+    try {
+      const result = spawnSync(
+        process.execPath,
+        ["scripts/init-playwright-test-agents.mjs"],
+        {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          env: { ...process.env, CI: "1" },
+        },
       );
+
+      expect(
+        result.status,
+        `initializer failed:\n${result.stderr || result.stdout}`,
+      ).toBe(0);
+      for (const file of managed) {
+        expect(readFileSync(path.resolve(process.cwd(), file))).toEqual(
+          before.get(file),
+        );
+      }
+    } finally {
+      for (const file of managed) {
+        writeFileSync(path.resolve(process.cwd(), file), before.get(file)!);
+      }
     }
   }, 30_000);
 
