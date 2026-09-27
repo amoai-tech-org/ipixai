@@ -58,6 +58,17 @@ describe("Dotenvx local secrets contract", () => {
     expect(read("scripts/check-local-secrets.mjs")).toContain(".env.keys");
   });
 
+  it("keeps local secret docs aligned with the in-process Planner env contract", () => {
+    const example = read(".env.example");
+    expect(example).toContain("ALWAYS runs the Production Planner in-process");
+    expect(example).not.toContain("# CPK_INTELLIGENCE_API_KEY=");
+
+    const secrets = read("docs/ipix-platform/06-development/SECRETS.md");
+    expect(secrets).toContain("| `CPK_INTELLIGENCE_API_KEY` | **DROP** |");
+    expect(secrets).toContain("| `INTELLIGENCE_API_KEY` | **DROP** |");
+    expect(secrets).toContain("| `MASTRA_BASE_URL` | **ROLLBACK_ONLY** |");
+  });
+
   it("launches coding agents with a separate least-privilege env file", () => {
     expect(pkg.scripts?.["agent:claude"]).toBe(
       "dotenvx run -f .env.agent --strict --redact -- claude",

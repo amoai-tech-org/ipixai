@@ -123,10 +123,13 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
+          # IPI-1329: planner-thread-isolation proves Org B cannot list/read
+          # Org A's Planner thread on this exact Preview (uses the ORG_B secrets).
           # Named specs only: brand-intelligence-journey is deliberately not
           # included because it writes to a hosted brand and must never run
           # against a Preview by accident.
           PLAYWRIGHT_BROWSERS_PATH=0 npx playwright test \
             --project=chromium-ai-smoke \
             e2e/planner-stop-journey.spec.ts \
-            e2e/planner-journey.spec.ts
+            e2e/planner-journey.spec.ts \
+            e2e/planner-thread-isolation.spec.ts

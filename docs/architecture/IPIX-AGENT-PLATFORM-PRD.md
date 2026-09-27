@@ -1,6 +1,7 @@
 # iPix Agent Platform — PRD
 
 **Status:** Draft for review. No production code changed by this document.
+**Current Product runtime decision (2026-09-26, IPI-1329 · MASTRA-INPROC-001):** `/api/copilotkit` runs the Production Planner in-process on Vercel with durable Mastra/Postgres history. The separate "Mastra service" in §12 is a fallback direction only (IPI-1310 · MASTRA-PROD-001), pursued only if the in-process path is disproven. Sections below keep the original 2026-09-20 analysis as historical context.
 **Date:** 2026-09-20
 **Companion docs:** [IPIX-AGENT-PLATFORM-ROADMAP.md](IPIX-AGENT-PLATFORM-ROADMAP.md) · [IPIX-REFERENCE-REUSE-MATRIX.md](IPIX-REFERENCE-REUSE-MATRIX.md) · [IPIX-MIGRATION-PLAN.md](IPIX-MIGRATION-PLAN.md)
 
@@ -23,7 +24,7 @@ flowchart LR
 ```
 
 - `src/app/api/copilotkit/[[...slug]]/route.ts` builds `CopilotRuntime` fresh inside `handleCopilot()`, per request (not module scope — see §3 for why).
-- Runner: `TenantAbortRunner` (SSE mode) or `IntelligenceAgentRunner` via `CopilotKitIntelligence` (Intelligence mode, gated on `CPK_INTELLIGENCE_API_KEY`).
+- Runner: `TenantAbortRunner` (SSE mode) only. **Update 2026-09-26 — IPI-1329 · MASTRA-INPROC-001:** the Product route no longer has an Intelligence/remote-Mastra mode; `CPK_INTELLIGENCE_API_KEY`, `COPILOTKIT_API_KEY` and `MASTRA_BASE_URL` are not read there and cannot switch the Planner away from in-process Mastra. (Historical, 2026-09-20: an `IntelligenceAgentRunner` mode gated on `CPK_INTELLIGENCE_API_KEY` existed; remote helpers remain in `src/agent.ts` / `mastra-control-runner.ts` until IPI-1334.)
 - Mastra runs fully in-process via `getMastra()` (`src/agent.ts`). No separate Mastra deployment exists today. `@mastra/client-js` is an installed but **unused** dependency (confirmed via repo-wide grep).
 - Durable history: Supabase Postgres via `@mastra/pg`, already correct and already ahead of every reference implementation reviewed for replay quality (see [reference matrix](IPIX-REFERENCE-REUSE-MATRIX.md)).
 

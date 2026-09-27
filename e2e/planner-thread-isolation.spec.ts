@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { test, expect, type Page } from "@playwright/test";
 
+import { previewBypassHeaders } from "../playwright.config";
 import { createCleanContext } from "./support/context";
 import { contextForSavedRole } from "./support/login";
+import { establishAndProveVercelBypass } from "./support/vercel-bypass";
 import { plannerThreadStorageKey } from "../src/mastra/thread-types";
 
 const orgBFile = path.resolve(__dirname, "../playwright/.auth/org-b.json");
@@ -314,7 +316,7 @@ test(
   },
 );
 
-test("planner thread API rejects unauthenticated requests", async ({ browser }) => {
+test("planner thread API rejects unauthenticated requests", async ({ browser, baseURL }) => {
   // createCleanContext is mandatory here: browser.newContext() inherits the
   // project's `use.storageState`, which would silently make this an
   // *authenticated* Org A request and turn a real 401 into a false 200.
@@ -324,6 +326,27 @@ test("planner thread API rejects unauthenticated requests", async ({ browser }) 
 
     const cookies = await context.cookies();
     expect(cookies, "the unauthenticated context must carry no cookies").toHaveLength(0);
+
+    // IPI-1329: on a protected Vercel Preview a cookie-less request never
+    // reaches iPix — Vercel answers with its own "Protected Deployment" login
+    // page (HTTP 200 HTML), a false 200 for this assertion. Clear Deployment
+    // Protection only (not iPix auth), then prove no Supabase session exists.
+    const bypass = previewBypassHeaders(
+      baseURL ?? "",
+      process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+    );
+    if (bypass && baseURL) {
+      await establishAndProveVercelBypass({
+        context,
+        page,
+        deploymentOrigin: new URL(baseURL).origin,
+        headers: bypass,
+      });
+      const sessionCookies = (await context.cookies()).filter((cookie) =>
+        cookie.name.startsWith("sb-"),
+      );
+      expect(sessionCookies, "the bypass must not carry a Supabase session").toHaveLength(0);
+    }
 
     const list = await page.request.get(THREADS_API);
     expect(

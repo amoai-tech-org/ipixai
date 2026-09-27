@@ -44,7 +44,7 @@ This table is names-only. No value from the legacy file is authoritative merely 
 | `CLOUDINARY_API_SECRET` | **KEEP_RUNTIME** | Server-only Cloudinary signing secret; never agent/browser. |
 | `CLOUDINARY_CLOUD_NAME` | **KEEP_RUNTIME** | Cloudinary account identifier. |
 | `CLOUDINARY_URL` | **DROP** | Current iPix config uses explicit CLOUDINARY_* names. |
-| `CPK_INTELLIGENCE_API_KEY` | **KEEP_RUNTIME** | Canonical managed CopilotKit Intelligence key. |
+| `CPK_INTELLIGENCE_API_KEY` | **DROP** | Product Planner no longer reads managed Intelligence keys; current runtime is in-process. |
 | `DATABASE_URL` | **RENAME** | Do not use for Mastra; current contract is MASTRA_DATABASE_URL. |
 | `E2E_TEST_EMAIL` | **TEST_ONLY** | .env.test / CI only. |
 | `E2E_TEST_EMAIL_SHOOTS` | **TEST_ONLY** | .env.test / CI only. |
@@ -60,11 +60,11 @@ This table is names-only. No value from the legacy file is authoritative merely 
 | `GOOGLE_CLOUD_PROJECT_ID` | **DROP** | No current iPix runtime consumer. |
 | `GRAFANA_SERVICE_ACCOUNT_TOKEN` | **TOOLING_ONLY** | External observability tooling; never coding-agent env. |
 | `GRAFANA_URL` | **TOOLING_ONLY** | External observability tooling. |
-| `INTELLIGENCE_API_KEY` | **RENAME** | Stale iPix alias; use CPK_INTELLIGENCE_API_KEY. |
+| `INTELLIGENCE_API_KEY` | **DROP** | Stale Intelligence alias; Product Planner does not read Intelligence keys. |
 | `IPIX_CF_INCLUDE_MASTRA_PG_SCOPE` | **DROP** | Legacy Cloudflare path only. |
 | `IPIX_MASTRA_HOSTED` | **KEEP_RUNTIME** | Hosted Mastra fail-closed mode flag. |
 | `LOG_LEVEL` | **KEEP_RUNTIME** | Optional local/runtime logging configuration. |
-| `MASTRA_BASE_URL` | **KEEP_RUNTIME** | Next/CopilotKit route to standalone Mastra. |
+| `MASTRA_BASE_URL` | **ROLLBACK_ONLY** | Used only by legacy remote-Mastra helpers/tests until IPI-1334; not Product Planner runtime. |
 | `MASTRA_DATABASE_URL` | **KEEP_RUNTIME** | Canonical Mastra Postgres connection; hosted mode requires it. |
 | `MASTRA_PASSWORD` | **DROP** | No current runtime consumer. |
 | `MASTRA_SCHEMA` | **DROP** | Current code fixes Mastra schema ownership in code. |

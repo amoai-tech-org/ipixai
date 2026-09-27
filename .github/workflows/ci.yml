@@ -556,11 +556,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prime postgres-meta image for type generation
+        # `supabase gen types --db-url` still launches a short-lived
+        # postgres-meta:v0.98.0 container in the pinned Supabase CLI 2.116.0,
+        # so this job primes that image before generated-type verification.
+        # The ECR override above also disables the CLI's own registry
+        # fallback, so the script prefers ECR and, only if ECR fails or
+        # throttles, pulls the identical upstream mirror from authenticated
+        # GHCR and tags it with the exact name the CLI requests. If both
+        # registries fail, the step fails — the type gate is never skipped.
+        run: bash scripts/prime-supabase-pgmeta.sh
       - name: Start local Supabase stack with bounded retry
-        # This job is DB-only: generate-supabase-types.mjs connects via
-        # `supabase gen types --db-url` (direct Postgres, not postgres-meta)
-        # and every assertion below is raw `psql`/`pg` against port 54322 —
-        # nothing here goes through Kong/GoTrue/PostgREST/Storage/Realtime/
+        # This job is DB-only. Most assertions are raw `psql`/`pg` against
+        # port 54322. `supabase gen types --db-url` still runs a short-lived
+        # postgres-meta container, so the step above primes that one image.
+        # Nothing here goes through Kong/GoTrue/PostgREST/Storage/Realtime/
         # Edge Functions, so every non-Postgres container is excludable, not
         # just the admin/observability ones. Verified locally: `supabase
         # start` with this same --exclude list, then `supabase db reset

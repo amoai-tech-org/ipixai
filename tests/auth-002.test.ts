@@ -265,7 +265,9 @@ describe("IPI-1046 · AUTH-002 tenant identity", () => {
       join(process.cwd(), "src/app/api/copilotkit/[[...slug]]/route.ts"),
       "utf8",
     );
-    expect(route).toContain("intelligenceIdentifyUser");
+    // IPI-1329: the Product route is local-only; Intelligence identity is
+    // no longer wired there (helper kept for IPI-1334 cleanup).
+    expect(route).not.toContain("intelligenceIdentifyUser");
     expect(route).toContain("new TenantAbortRunner");
     expect(route).toContain("identifyUser: identifyOperator");
     expect(route).not.toMatch(/name:\s*operator\.name/);

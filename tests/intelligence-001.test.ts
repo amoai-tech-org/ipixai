@@ -1,22 +1,32 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  CopilotKitIntelligence,
-  InMemoryAgentRunner,
-  IntelligenceAgentRunner,
-} from "@copilotkit/runtime/v2";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
 
 import * as agent from "../src/agent";
 import { GET, POST } from "../src/app/api/copilotkit/[[...slug]]/route";
 import { memoryResourceId } from "../src/lib/auth/verified-operator";
 
+/**
+ * IPI-1329 · MASTRA-INPROC-001 — Product `/api/copilotkit` always runs the
+ * in-process Production Planner. Managed Intelligence keys and a remote
+ * `MASTRA_BASE_URL` are not Product runtime switches: setting them must not
+ * select Intelligence mode, call `createRemoteAgents`, or return
+ * `503 remote_mastra_unavailable`.
+ */
+
 const USER_A = "11111111-1111-4111-8111-111111111111";
-const USER_B = "22222222-2222-4222-8222-222222222222";
 const ORG_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ORG_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const ORG_A_THREAD = "thread-org-a-secret";
 const RESOURCE_A = `org:${ORG_A}::user:${USER_A}`;
-const RESOURCE_B = `org:${ORG_B}::user:${USER_B}`;
 const RESOURCE_A_IN_ORG_B = `org:${ORG_B}::user:${USER_A}`;
+
+const REMOTE_ENV = [
+  "CPK_INTELLIGENCE_API_KEY",
+  "COPILOTKIT_API_KEY",
+  "MASTRA_BASE_URL",
+  "INTELLIGENCE_API_URL",
+  "INTELLIGENCE_GATEWAY_WS_URL",
+  "COPILOTKIT_LICENSE_TOKEN",
+] as const;
 
 const memberships: { rows: { org_id: string }[] } = { rows: [] };
 const claims: { sub?: string; email?: string } = {
@@ -38,15 +48,10 @@ vi.mock("../src/lib/supabase/server", () => ({
     from: (table: string) => ({
       select: () => ({
         eq: async (column: string, value: string) => {
-          if (table !== "org_members") {
-            return { data: null, error: { message: "unexpected table" } };
+          if (table !== "org_members" || column !== "user_id") {
+            return { data: null, error: { message: "unexpected query" } };
           }
-          if (column !== "user_id") {
-            return { data: null, error: { message: `unexpected column ${column}` } };
-          }
-          if (value !== claims.sub) {
-            return { data: [], error: null };
-          }
+          if (value !== claims.sub) return { data: [], error: null };
           return { data: memberships.rows, error: null };
         },
       }),
@@ -55,423 +60,124 @@ vi.mock("../src/lib/supabase/server", () => ({
   createClient: async () => null,
 }));
 
-function copilotRequest(
-  path: string,
-  options: { method?: string; body?: Record<string, unknown> } = {},
-): Request {
-  const method = options.method ?? "GET";
-  const init: RequestInit = {
+function copilotRequest(path: string, method = "GET"): Request {
+  return new Request(`http://localhost${path}`, {
     method,
     headers: { "content-type": "application/json" },
-  };
-  if (options.body && method !== "GET" && method !== "HEAD") {
-    init.body = JSON.stringify(options.body);
-  }
-  return new Request(`http://localhost${path}`, init);
+  });
 }
 
-function emptyThreadList() {
-  return { threads: [] as { id: string; name: string | null }[], joinCode: "" };
-}
+const REMOTE_CONFIGS: { name: string; env: Partial<Record<(typeof REMOTE_ENV)[number], string>> }[] = [
+  {
+    name: "CPK_INTELLIGENCE_API_KEY + MASTRA_BASE_URL",
+    env: { CPK_INTELLIGENCE_API_KEY: "test-intelligence-key", MASTRA_BASE_URL: "http://mastra.test" },
+  },
+  {
+    name: "COPILOTKIT_API_KEY alias + MASTRA_BASE_URL",
+    env: { COPILOTKIT_API_KEY: "test-alias-key", MASTRA_BASE_URL: "http://mastra.test" },
+  },
+  {
+    name: "Intelligence key without MASTRA_BASE_URL (old 503 path)",
+    env: { CPK_INTELLIGENCE_API_KEY: "test-intelligence-key" },
+  },
+  {
+    name: "MASTRA_BASE_URL alone",
+    env: { MASTRA_BASE_URL: "http://mastra.test" },
+  },
+  {
+    name: "Intelligence key + self-hosted endpoint pair + license token",
+    env: {
+      CPK_INTELLIGENCE_API_KEY: "test-intelligence-key",
+      MASTRA_BASE_URL: "http://mastra.test",
+      INTELLIGENCE_API_URL: "https://intelligence.test",
+      INTELLIGENCE_GATEWAY_WS_URL: "wss://intelligence.test",
+      COPILOTKIT_LICENSE_TOKEN: "test-license-token",
+    },
+  },
+];
 
-function orgAThreadList() {
-  return {
-    threads: [{ id: ORG_A_THREAD, name: "SS26 shot list" }],
-    joinCode: "join-org-a",
-  };
-}
-
-function runBody(threadId: string) {
-  return {
-    threadId,
-    runId: `run-${threadId}`,
-    state: {},
-    messages: [
-      {
-        id: "msg-user-1",
-        role: "user" as const,
-        content: "Create a SS26 campaign shoot plan.",
-      },
-    ],
-    tools: [],
-    context: [],
-    forwardedProps: {},
-  };
-}
-
-/**
- * Installed @copilotkit/runtime@1.68.1 has no public connectThread.
- * HTTP /connect calls CopilotKitIntelligence.prototype.ɵconnectThread.
- */
-function mockOrgAThreadAccess() {
-  const listSpy = vi
-    .spyOn(CopilotKitIntelligence.prototype, "listThreads")
-    .mockImplementation(async ({ userId }) => {
-      if (userId === RESOURCE_A) {
-        return orgAThreadList();
-      }
-      return emptyThreadList();
-    });
-
-  const connect = CopilotKitIntelligence.prototype.ɵconnectThread;
-  if (typeof connect !== "function") {
-    throw new Error(
-      "CopilotKitIntelligence.prototype.ɵconnectThread missing on installed @copilotkit/runtime",
-    );
-  }
-  const connectSpy = vi
-    .spyOn(CopilotKitIntelligence.prototype, "ɵconnectThread")
-    .mockImplementation(async ({ userId, threadId }) => {
-      if (userId === RESOURCE_A && threadId === ORG_A_THREAD) {
-        return { threadId: ORG_A_THREAD, joinToken: "org-a-token" };
-      }
-      return null;
-    });
-
-  return { listSpy, connectSpy };
-}
-
-/** CopilotKit 1.73.3 checks thread ownership via getThread() before Stop. */
-function mockOrgAThreadOwnership() {
-  return vi
-    .spyOn(CopilotKitIntelligence.prototype, "getThread")
-    .mockImplementation(async ({ userId, threadId }) => {
-      if (userId === RESOURCE_A && threadId === ORG_A_THREAD) {
-        return { id: ORG_A_THREAD, agentId: "default" } as Awaited<
-          ReturnType<CopilotKitIntelligence["getThread"]>
-        >;
-      }
-      throw Object.assign(new Error("not found"), { status: 404 });
-    });
-}
-
-describe("IPI-1009 intelligence tenant safety", () => {
-  const previousLicense = process.env.COPILOTKIT_LICENSE_TOKEN;
-  // IPI-1191 · COPILOT-INTEL-001 — route.ts reads CPK_INTELLIGENCE_API_KEY
-  // (COPILOTKIT_API_KEY alias), not the stale INTELLIGENCE_API_KEY name.
-  const previousIntelligence = process.env.CPK_INTELLIGENCE_API_KEY;
-  const previousMastraBaseUrl = process.env.MASTRA_BASE_URL;
+describe("IPI-1329 Product /api/copilotkit runs the in-process Planner only", () => {
+  beforeEach(() => {
+    for (const name of REMOTE_ENV) vi.stubEnv(name, "");
+    memberships.rows = [{ org_id: ORG_A }];
+  });
 
   afterEach(() => {
     memberships.rows = [];
     claims.sub = USER_A;
     claims.email = "operator@example.com";
-    if (previousLicense === undefined) {
-      delete process.env.COPILOTKIT_LICENSE_TOKEN;
-    } else {
-      process.env.COPILOTKIT_LICENSE_TOKEN = previousLicense;
-    }
-    if (previousIntelligence === undefined) {
-      delete process.env.CPK_INTELLIGENCE_API_KEY;
-    } else {
-      process.env.CPK_INTELLIGENCE_API_KEY = previousIntelligence;
-    }
-    if (previousMastraBaseUrl === undefined) {
-      delete process.env.MASTRA_BASE_URL;
-    } else {
-      process.env.MASTRA_BASE_URL = previousMastraBaseUrl;
-    }
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
-  // Recommended managed-mode production config sets only the Intelligence
-  // key, not COPILOTKIT_LICENSE_TOKEN (that's a separate, offline/self-
-  // hosted-only credential — see route.ts's drift warning). Normal tests
-  // below reflect that; the mixed-config case has its own dedicated test.
-  function enableIntelligence() {
-    process.env.CPK_INTELLIGENCE_API_KEY = "test-intelligence-key";
-    process.env.MASTRA_BASE_URL = "http://mastra.test";
-    vi.spyOn(agent, "createRemoteAgents").mockImplementation(async (resourceId) =>
-      agent.createLocalAgents(resourceId),
-    );
-  }
-
-  it("encodes Intelligence identity as org+user, not JWT user id", () => {
-    expect(RESOURCE_A).toBe(`org:${ORG_A}::user:${USER_A}`);
-    expect(RESOURCE_A).not.toBe(USER_A);
+  it("encodes Planner identity as org+user, not the JWT user id", () => {
     expect(memoryResourceId({ userId: USER_A, orgId: ORG_A })).toBe(RESOURCE_A);
     expect(memoryResourceId({ userId: USER_A, orgId: ORG_B })).toBe(
       RESOURCE_A_IN_ORG_B,
     );
+    expect(RESOURCE_A).not.toBe(USER_A);
   });
 
-  // Key-selection coverage: CPK_INTELLIGENCE_API_KEY present -> intelligence
-  // is already exercised by every enableIntelligence()-based test below, so
-  // it isn't duplicated here. These two cases were the genuinely uncovered
-  // ones (route.ts:212-215's `||` fallback chain).
-  it("uses COPILOTKIT_API_KEY fallback to select Intelligence mode", async () => {
-    const previousAlias = process.env.COPILOTKIT_API_KEY;
-    delete process.env.CPK_INTELLIGENCE_API_KEY;
-    process.env.COPILOTKIT_API_KEY = "test-alias-key";
-    process.env.MASTRA_BASE_URL = "http://mastra.test";
-    vi.spyOn(agent, "createRemoteAgents").mockImplementation(async (resourceId) =>
-      agent.createLocalAgents(resourceId),
-    );
-    memberships.rows = [{ org_id: ORG_A }];
-    try {
-      const info = await GET(
-        copilotRequest("/api/copilotkit/info", { method: "GET" }),
-      );
-      expect(info.status).toBe(200);
-      const payload = (await info.json()) as { mode?: string };
-      expect(payload.mode).toBe("intelligence");
-    } finally {
-      if (previousAlias === undefined) {
-        delete process.env.COPILOTKIT_API_KEY;
-      } else {
-        process.env.COPILOTKIT_API_KEY = previousAlias;
-      }
-    }
-  });
+  it.each(REMOTE_CONFIGS)(
+    "stays on the local default Planner with $name",
+    async ({ env }) => {
+      for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+      const remote = vi.spyOn(agent, "createRemoteAgents");
+      const local = vi.spyOn(agent, "createLocalAgents");
+      const intelligenceList = vi.spyOn(CopilotKitIntelligence.prototype, "listThreads");
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
 
-  it("falls back to SSE mode when neither Intelligence key is set", async () => {
-    const previousAlias = process.env.COPILOTKIT_API_KEY;
-    delete process.env.CPK_INTELLIGENCE_API_KEY;
-    delete process.env.COPILOTKIT_API_KEY;
-    memberships.rows = [{ org_id: ORG_A }];
-    try {
-      const info = await GET(
-        copilotRequest("/api/copilotkit/info", { method: "GET" }),
-      );
+      const info = await GET(copilotRequest("/api/copilotkit/info"));
+      const raw = await info.text();
+
       expect(info.status).toBe(200);
-      const payload = (await info.json()) as { mode?: string };
+      expect(raw).not.toContain("remote_mastra_unavailable");
+      const payload = JSON.parse(raw) as {
+        mode?: string;
+        intelligence?: unknown;
+        agents?: Record<string, unknown>;
+      };
       expect(payload.mode).toBe("sse");
-    } finally {
-      if (previousAlias === undefined) {
-        delete process.env.COPILOTKIT_API_KEY;
-      } else {
-        process.env.COPILOTKIT_API_KEY = previousAlias;
-      }
-    }
-  });
-
-  it("selects Intelligence mode and fails closed on a thread-only Stop", async () => {
-    enableIntelligence();
-    const sseStop = vi.spyOn(InMemoryAgentRunner.prototype, "stop");
-    const intelligenceStop = vi.spyOn(IntelligenceAgentRunner.prototype, "stop");
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.endsWith("/ipix/run-control/active")) {
-        return new Response(JSON.stringify({ runId: "R1" }), { status: 200 });
-      }
-      if (url.endsWith("/ipix/run-control/abort")) {
-        return new Response(JSON.stringify({ aborted: true }), { status: 200 });
-      }
-      return new Response(null, { status: 204 });
-    });
-    memberships.rows = [{ org_id: ORG_A }];
-    mockOrgAThreadOwnership();
-
-    const info = await GET(copilotRequest("/api/copilotkit/info", { method: "GET" }));
-    expect(info.status).toBe(200);
-    expect((await info.json() as { mode?: string }).mode).toBe("intelligence");
-
-    const stop = await POST(
-      copilotRequest(
-        `/api/copilotkit/agent/default/stop/${encodeURIComponent(ORG_A_THREAD)}`,
-        { method: "POST" },
-      ),
-    );
-    expect(stop.status).toBe(200);
-    expect(sseStop).not.toHaveBeenCalled();
-    expect(intelligenceStop).not.toHaveBeenCalled();
-    const controlCalls = fetchSpy.mock.calls.filter(([input]) =>
-      String(input).includes("/ipix/run-control/"),
-    );
-    expect(controlCalls).toHaveLength(0);
-  });
-
-  // IPI-1290: CopilotKit 1.73.3 sends `{ runId }` on Stop. The exact run
-  // must reach the remote abort boundary without an /active lookup.
-  it("forwards an exact Stop { runId } to the remote abort as that run", async () => {
-    enableIntelligence();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.endsWith("/ipix/run-control/abort")) {
-        return new Response(JSON.stringify({ aborted: true }), { status: 200 });
-      }
-      return new Response(null, { status: 204 });
-    });
-    memberships.rows = [{ org_id: ORG_A }];
-    mockOrgAThreadOwnership();
-
-    const stop = await POST(
-      copilotRequest(
-        `/api/copilotkit/agent/default/stop/${encodeURIComponent(ORG_A_THREAD)}`,
-        { method: "POST", body: { runId: "R1" } },
-      ),
-    );
-    expect(stop.status).toBe(200);
-
-    const controlCalls = fetchSpy.mock.calls.filter(([input]) =>
-      String(input).includes("/ipix/run-control/"),
-    );
-    expect(controlCalls.map(([input]) => String(input))).toEqual([
-      expect.stringMatching(/\/ipix\/run-control\/abort$/),
-    ]);
-    const body = JSON.parse(String((controlCalls[0][1] as RequestInit).body)) as {
-      runId?: string;
-    };
-    expect(body.runId).toBe("R1");
-  });
-
-  // Negative ownership: a Stop from outside the thread's tenant must be
-  // rejected before it can reach the remote abort boundary.
-  it.each([
-    { name: "an unauthenticated caller", sub: undefined, org: ORG_A, status: 401 },
-    { name: "another org's operator", sub: USER_B, org: ORG_B, status: 404 },
-  ])("rejects an exact Stop from $name without calling abort", async ({ sub, org, status }) => {
-    enableIntelligence();
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockImplementation(async () => new Response(JSON.stringify({ aborted: true }), { status: 200 }));
-    claims.sub = sub;
-    memberships.rows = [{ org_id: org }];
-    mockOrgAThreadOwnership();
-
-    const stop = await POST(
-      copilotRequest(
-        `/api/copilotkit/agent/default/stop/${encodeURIComponent(ORG_A_THREAD)}`,
-        { method: "POST", body: { runId: "R1" } },
-      ),
-    );
-    expect(stop.status).toBe(status);
-    const controlCalls = fetchSpy.mock.calls.filter(([input]) =>
-      String(input).includes("/ipix/run-control/"),
-    );
-    expect(controlCalls).toHaveLength(0);
-  });
-
-  it.each([
-    { runId: "" },
-    { runId: 123 },
-    { runId: null },
-    { runId: [] },
-    { runId: {} },
-    { runId: true },
-    { runId: "R1", extra: "field" },
-  ])(
-    "rejects a malformed Stop body %j with 400 without calling abort",
-    async (body) => {
-      enableIntelligence();
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockImplementation(async () => new Response(JSON.stringify({ aborted: true }), { status: 200 }));
-      memberships.rows = [{ org_id: ORG_A }];
-      mockOrgAThreadOwnership();
-
-      const stop = await POST(
-        copilotRequest(
-          `/api/copilotkit/agent/default/stop/${encodeURIComponent(ORG_A_THREAD)}`,
-          { method: "POST", body },
+      expect(payload.intelligence).toBeUndefined();
+      expect(Object.keys(payload.agents ?? {})).toEqual(["default"]);
+      expect(local).toHaveBeenCalledWith(RESOURCE_A);
+      expect(remote).not.toHaveBeenCalled();
+      expect(intelligenceList).not.toHaveBeenCalled();
+      expect(
+        fetchSpy.mock.calls.filter(([input]) =>
+          /mastra\.test|intelligence\.test|\/ipix\/run-control\//.test(String(input)),
         ),
-      );
-      expect(stop.status).toBe(400);
-      const controlCalls = fetchSpy.mock.calls.filter(([input]) =>
-        String(input).includes("/ipix/run-control/"),
-      );
-      expect(controlCalls).toHaveLength(0);
+      ).toHaveLength(0);
     },
   );
 
-  it("lists threads under the org+user Intelligence identity", async () => {
-    enableIntelligence();
-    memberships.rows = [{ org_id: ORG_A }];
-    const { listSpy } = mockOrgAThreadAccess();
-
-    const response = await GET(
-      copilotRequest("/api/copilotkit/threads?agentId=default", {
-        method: "GET",
-      }),
-    );
-    expect(response.status).toBe(200);
-    expect(listSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: RESOURCE_A, agentId: "default" }),
-    );
-    expect(listSpy).not.toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER_A }),
-    );
-    expect(await response.json()).toEqual(orgAThreadList());
-  });
-
-  it("does not let Org B list or connect to Org A Intelligence threads", async () => {
-    enableIntelligence();
-    const { connectSpy } = mockOrgAThreadAccess();
-
-    claims.sub = USER_B;
+  it("keeps the local Planner resource scoped to the verified org when the same user switches org", async () => {
+    vi.stubEnv("CPK_INTELLIGENCE_API_KEY", "test-intelligence-key");
+    vi.stubEnv("MASTRA_BASE_URL", "http://mastra.test");
+    const local = vi.spyOn(agent, "createLocalAgents");
     memberships.rows = [{ org_id: ORG_B }];
 
-    const listed = await GET(
-      copilotRequest("/api/copilotkit/threads?agentId=default", {
-        method: "GET",
-      }),
-    );
-    expect(listed.status).toBe(200);
-    const listedBody = await listed.json();
-    expect(listedBody).toEqual(emptyThreadList());
-    expect(JSON.stringify(listedBody)).not.toContain("SS26 shot list");
+    const info = await GET(copilotRequest("/api/copilotkit/info"));
 
-    const connected = await POST(
-      copilotRequest("/api/copilotkit/agent/default/connect", {
-        method: "POST",
-        body: runBody(ORG_A_THREAD),
-      }),
-    );
-    expect(connected.status).toBe(204);
-    expect(connectSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: RESOURCE_B,
-        threadId: ORG_A_THREAD,
-        agentId: "default",
-      }),
-    );
-    expect(connectSpy).not.toHaveBeenCalledWith(
-      expect.objectContaining({ userId: RESOURCE_A }),
-    );
-  });
-
-  it("does not let the same user attach Org A Intelligence threads from Org B", async () => {
-    enableIntelligence();
-    const { connectSpy } = mockOrgAThreadAccess();
-
-    claims.sub = USER_A;
-    memberships.rows = [{ org_id: ORG_B }];
-
-    const listed = await GET(
-      copilotRequest("/api/copilotkit/threads?agentId=default", {
-        method: "GET",
-      }),
-    );
-    expect(listed.status).toBe(200);
-    expect(await listed.json()).toEqual(emptyThreadList());
-
-    const connected = await POST(
-      copilotRequest("/api/copilotkit/agent/default/connect", {
-        method: "POST",
-        body: runBody(ORG_A_THREAD),
-      }),
-    );
-    expect(connected.status).toBe(204);
-    expect(connectSpy.mock.calls[0]?.[0]).toMatchObject({
-      userId: RESOURCE_A_IN_ORG_B,
-      threadId: ORG_A_THREAD,
-    });
-    expect(RESOURCE_A_IN_ORG_B).not.toBe(RESOURCE_A);
-  });
-
-  it("warns when a managed Intelligence key and COPILOTKIT_LICENSE_TOKEN are both present", async () => {
-    enableIntelligence();
-    process.env.COPILOTKIT_LICENSE_TOKEN = "stale-self-hosted-token";
-    memberships.rows = [{ org_id: ORG_A }];
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-    const info = await GET(
-      copilotRequest("/api/copilotkit/info", { method: "GET" }),
-    );
     expect(info.status).toBe(200);
+    expect(local).toHaveBeenCalledWith(RESOURCE_A_IN_ORG_B);
+    expect(local).not.toHaveBeenCalledWith(RESOURCE_A);
+  });
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("COPILOTKIT_LICENSE_TOKEN is also present"),
+  it("rejects an unauthenticated caller before any Planner is created, even with remote env set", async () => {
+    vi.stubEnv("CPK_INTELLIGENCE_API_KEY", "test-intelligence-key");
+    vi.stubEnv("MASTRA_BASE_URL", "http://mastra.test");
+    const remote = vi.spyOn(agent, "createRemoteAgents");
+    const local = vi.spyOn(agent, "createLocalAgents");
+    claims.sub = undefined;
+
+    const stop = await POST(
+      copilotRequest("/api/copilotkit/agent/default/stop/thread-org-a", "POST"),
     );
+
+    expect(stop.status).toBe(401);
+    expect(await stop.text()).not.toContain("remote_mastra_unavailable");
+    expect(local).not.toHaveBeenCalled();
+    expect(remote).not.toHaveBeenCalled();
   });
 });
