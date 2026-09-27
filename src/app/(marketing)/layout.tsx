@@ -10,8 +10,8 @@ import { MarketingFooter } from "@/components/marketing/footer";
 import { SITE_URL } from "@/lib/site";
 
 // IPI-1359 · NEXT-FONTS-001 — self-hosted; see src/app/layout.tsx. The other
-// subsets live in ./marketing-fonts.css under these variable names
-// ("cormorant", "outfit"). Google serves Cormorant Garamond as one variable
+// subsets live in ./marketing-fonts.css under family names pinned explicitly
+// through localFont declarations. Google serves Cormorant Garamond as one variable
 // file, so 500/600/700 share it exactly as they did before.
 const cormorant = localFont({
   src: [
@@ -22,6 +22,7 @@ const cormorant = localFont({
   variable: "--font-cormorant",
   adjustFontFallback: "Times New Roman",
   declarations: [
+    { prop: "font-family", value: "cormorant" },
     {
       prop: "unicode-range",
       value:
@@ -35,6 +36,7 @@ const outfit = localFont({
   weight: "100 900",
   variable: "--font-outfit",
   declarations: [
+    { prop: "font-family", value: "outfit" },
     {
       prop: "unicode-range",
       value:

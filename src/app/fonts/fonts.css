@@ -1,6 +1,7 @@
 /* IPI-1359 · NEXT-FONTS-001 — non-Latin subsets of the self-hosted Inter and Geist Mono.
-   The Latin subset is loaded by next/font/local in src/app/layout.tsx, which names the
-   family after its JS variable ("inter", "geistMono"). These rules add the other subsets
+   The Latin subset is loaded by next/font/local in src/app/layout.tsx, which explicitly
+   pins the family names "inter" and "geistMono" via declarations. These rules add
+   the other subsets
    Google Fonts used to serve under the same family, so Latin Extended, Cyrillic,
    Greek and Vietnamese text keeps rendering in the brand font instead of the
    fallback. Files are the exact ones the build downloaded from Google before this

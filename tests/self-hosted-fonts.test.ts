@@ -5,9 +5,9 @@ import { describe, expect, it } from "vitest";
 /**
  * IPI-1359 · NEXT-FONTS-001 — the build must never fetch Google Fonts
  * (vercel/next.js#99114 fails Turbopack builds on some Google responses).
- * Each layout preloads the Latin subset with next/font/local, which names the
- * font family after the JS variable; the other subsets are plain @font-face
- * rules that must use that same family name, or non-Latin text would silently
+ * Each layout preloads the Latin subset with next/font/local and explicitly pins
+ * the generated font family through declarations; the other subsets are plain
+ * @font-face rules that must use that same family name, or non-Latin text would silently
  * fall back to Arial / Times New Roman.
  */
 const root = process.cwd();
@@ -39,10 +39,24 @@ describe("self-hosted fonts", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("builds with Turbopack, which names the family after the JS variable", () => {
-    // Turbopack emits `font-family: inter` for `const inter = localFont(...)`;
-    // webpack's next/font loader renames it to a hashed `__inter_<hash>`, which
-    // would silently orphan every subset rule above. Refuse a webpack build.
+  it("pins each next/font/local family with the supported declarations API", () => {
+    for (const { layout, fonts } of LAYOUTS) {
+      const source = read(layout);
+      for (const name of fonts) {
+        const start = source.indexOf(`const ${name} = localFont(`);
+        expect(start, `${layout}: ${name}`).toBeGreaterThanOrEqual(0);
+        const nextFont = source.indexOf("const ", start + 1);
+        const block = source.slice(start, nextFont === -1 ? undefined : nextFont);
+        expect(block, `${layout}: ${name}`).toContain(`prop: "font-family"`);
+        expect(block, `${layout}: ${name}`).toContain(`value: "${name}"`);
+      }
+    }
+  });
+
+  it("keeps production builds on the verified Turbopack path", () => {
+    // Family names are pinned explicitly above, but this PR's offline-build and
+    // pixel-parity evidence was certified on Turbopack. Keep an unverified
+    // webpack switch from silently changing the production build contract.
     const scripts = Object.values(
       (JSON.parse(read("package.json")) as { scripts: Record<string, string> }).scripts,
     );

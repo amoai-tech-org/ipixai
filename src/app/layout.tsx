@@ -11,13 +11,14 @@ import { Analytics } from "@vercel/analytics/next";
 // IPI-1359 · NEXT-FONTS-001 — fonts are self-hosted so a build never depends
 // on Google Fonts (vercel/next.js#99114: an odd Google Fonts response can fail
 // a Turbopack build). Only the Latin subset is preloaded here, as before; the
-// other subsets live in ./fonts/fonts.css under the same family names, which
-// next/font/local takes from these variable names ("inter", "geistMono").
+// other subsets live in ./fonts/fonts.css under the same family names. Each
+// localFont call pins that family explicitly through the supported declarations API.
 const inter = localFont({
   src: "./fonts/inter-latin.woff2",
   weight: "100 900",
   variable: "--font-inter",
   declarations: [
+    { prop: "font-family", value: "inter" },
     {
       prop: "unicode-range",
       value:
@@ -31,6 +32,7 @@ const geistMono = localFont({
   weight: "100 900",
   variable: "--font-geist-mono",
   declarations: [
+    { prop: "font-family", value: "geistMono" },
     {
       prop: "unicode-range",
       value:
