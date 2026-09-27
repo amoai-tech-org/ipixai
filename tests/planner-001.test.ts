@@ -116,4 +116,39 @@ describe("IPI-1087 PLANNER-CONTEXT-001: active Brand/Shoot context reaches the m
     );
     expect(instructions).not.toContain("bad");
   });
+
+  // IPI-1363 · PLANNER-CONTEXT-002 — the container itself can be malformed, not
+  // just its entries. `(agUi?.context ?? [])` is a nullish check, so a truthy
+  // wrong-typed `context` reached `.map()` and threw
+  // "TypeError: ....map is not a function", failing the whole Planner turn.
+  // A malformed container must be omitted exactly like malformed JSON.
+  it("does not throw and adds nothing when the registered ag-ui container is not an array", async () => {
+    const baseline = String(await getProductionPlannerAgent().getInstructions());
+    for (const malformed of ["not-an-array", { not: "an array" }, 42, true]) {
+      const requestContext = new RequestContext();
+      requestContext.setRaw("ag-ui", { context: malformed });
+      const instructions = String(
+        await getProductionPlannerAgent().getInstructions({ requestContext }),
+      );
+      expect(instructions, `context was ${JSON.stringify(malformed)}`).toBe(baseline);
+    }
+  });
+
+  it("still formats a valid context container in order (control for the malformed-container guard)", async () => {
+    const requestContext = new RequestContext();
+    requestContext.setRaw("ag-ui", {
+      context: [
+        { description: "The Shoot the operator currently has open.", value: JSON.stringify({ scopeKey: "shoot:s1" }) },
+        { description: "The Brand the operator currently has open.", value: JSON.stringify({ scopeKey: "brand:b1" }) },
+      ],
+    });
+    const instructions = String(
+      await getProductionPlannerAgent().getInstructions({ requestContext }),
+    );
+    expect(instructions).toContain("## Active workspace context");
+    expect(instructions).toContain("shoot:s1");
+    expect(instructions).toContain("brand:b1");
+    // Registration order is preserved.
+    expect(instructions.indexOf("shoot:s1")).toBeLessThan(instructions.indexOf("brand:b1"));
+  });
 });
