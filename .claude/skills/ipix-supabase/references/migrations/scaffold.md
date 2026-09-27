@@ -1,7 +1,6 @@
 # iPix migration scaffold
 
-**Remote-only** project `nvdlhrodvevgwdsneplk` — never `supabase start` locally. Folded from
-former `create-migration` skill.
+**Production project** `nvdlhrodvevgwdsneplk` is remote-only for mutation. Migration verification happens against a local Supabase fresh replay; never run destructive linked commands against production. Folded from former `create-migration` skill.
 
 **Also load:** [`../supabase-core/MIGRATIONS.md`](../supabase-core/MIGRATIONS.md) (generic structure) ·
 [`../project-rules/supabase-migrations.md`](../project-rules/supabase-migrations.md) ·
@@ -38,15 +37,16 @@ former `create-migration` skill.
    CREATE INDEX ON public.<table>(<fk_column_id>);
    ```
 
-5. **Review before push** — migration-reviewer subagent or `@migration-reviewer` on new files in
+5. **Review before merge** — migration-reviewer subagent or `@migration-reviewer` on new files in
    `supabase/migrations/`.
 
-6. **Push and regen types:**
+6. **Fresh replay and verify:**
    ```bash
-   dotenvx run --convention=nextjs -- npm run supabase:push
-   npm run supabase:types
-   dotenvx run --convention=nextjs -- npm run supabase:verify-rls
+   supabase start
+   supabase db reset --local
+   npm run supabase:types:check  # when exposed schemas/types changed
    ```
+   Then run the affected targeted SQL/security tests from the verification matrix. Production migration application is owned by the reviewed merge/deploy path; do not manually `db push --linked`.
 
 ## iPix conventions
 

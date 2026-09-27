@@ -15,7 +15,7 @@ verified_at: 2026-07-20
 
 ```bash
 .claude/skills/ipix-supabase/scripts/verify-edge-inventory.sh
-npm run supabase:verify-edge
+cd supabase && deno task test
 ```
 
 Each deployed function needs a `[functions.<name>]` block in `supabase/config.toml`.
@@ -72,4 +72,4 @@ Allow origins: `http://localhost:8080`, production Vite URL from env.
 1. Add `supabase/functions/<name>/index.ts`
 2. Register in `supabase/config.toml`
 3. Deploy: `supabase functions deploy <name> --linked`
-4. Run `npm run supabase:verify-edge`
+4. Run `.claude/skills/ipix-supabase/scripts/verify-edge-inventory.sh` and the affected Deno tests (`cd supabase && deno task test`)

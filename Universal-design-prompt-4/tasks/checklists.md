@@ -86,7 +86,7 @@ Wire only where backend exists ([`data/supabase-plan.md`](../plan/data/supabase-
 - [ ] **B4-RPC** `set_availability_batch` ([BE-B4](./backend/BE-B4-set-availability-batch.md))
 - [ ] **CRM-OPT** convenience RPCs ([BE-CRM-opt](./backend/BE-CRM-opt-convenience-rpcs.md))
 
-Verify: `infisical run -- npm run supabase:verify-rls`
+Verify: local fresh replay (`supabase start` → `supabase db reset --local`) + affected targeted SQL/security tests; CI `supabase-fresh-replay` must pass.
 
 ---
 
@@ -122,7 +122,7 @@ Backend AI task: [BE-B0b-booking-mastra-agent.md](./backend/BE-B0b-booking-mastr
 ## 8. Testing
 
 - [ ] `cd app && npm run lint && npm run build && npm test`
-- [ ] `infisical run -- npm run supabase:verify-rls` (if migrations)
+- [ ] Local fresh replay (`supabase start` → `supabase db reset --local`) + affected targeted SQL/security tests (if migrations/RLS)
 - [ ] Playwright smoke for wired screens
 - [ ] axe a11y on CRM + Booking flows
 - [ ] Lighthouse on Command Center + Brand Detail

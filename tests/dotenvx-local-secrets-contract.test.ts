@@ -93,4 +93,23 @@ describe("Dotenvx local secrets contract", () => {
     expect(existsSync(join(root, ".infisical.json"))).toBe(false);
     expect(read("AGENTS.md")).not.toContain(".infisical.json");
   });
+
+  it("keeps active Supabase verification guidance off retired Infisical and removed npm scripts", () => {
+    const activeGuides = [
+      ".claude/skills/worktrees/SKILL.md",
+      ".claude/skills/ipix-supabase/SKILL.md",
+      ".claude/skills/ipix-supabase/references/migrations/scaffold.md",
+      ".claude/skills/ipix-supabase/references/tables-overview.md",
+      ".claude/skills/ipix-supabase/references/edge-functions/edge-functions-inventory.md",
+      ".claude/skills/linear/SKILL.md",
+      "Universal-design-prompt-4/tasks/checklists.md",
+      "Universal-design-prompt-4/tasks/README.md",
+      "Universal-design-prompt-4/docs/design-docs/plan/TASK-CONTRACT.yaml",
+    ];
+    for (const file of activeGuides) {
+      const source = read(file);
+      expect(source).not.toContain("infisical run");
+      expect(source).not.toContain("npm run supabase:verify-rls");
+    }
+  });
 });

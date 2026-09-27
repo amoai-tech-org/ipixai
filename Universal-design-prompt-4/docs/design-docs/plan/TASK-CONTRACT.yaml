@@ -49,7 +49,7 @@ steps:
 
 verify:
   build: cd app && npm run lint && npm test && npm run build
-  rls: infisical run -- npm run supabase:verify-rls  # if DB
+  rls: "supabase start; supabase db reset --local; run affected targeted SQL/security tests"  # if DB
   browser: manual npm run dev :3002 — desktop + 375px  # before Playwright
   design_review: DESIGN-REVIEW-CHECKLIST.md + design.md §4  # before Playwright
   playwright: path/to/spec or n/a

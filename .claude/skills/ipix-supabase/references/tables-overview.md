@@ -45,7 +45,7 @@ ORDER BY c.relname;
 
 Every row must have `relrowsecurity = t`.
 
-Automated: `npm run supabase:verify-rls` (cross-tenant isolation tests).
+Automated: local fresh replay plus the affected targeted SQL/security tests; CI `supabase-fresh-replay` is the global migration/RLS reproducibility gate.
 
 ## Indexes (MVP)
 
