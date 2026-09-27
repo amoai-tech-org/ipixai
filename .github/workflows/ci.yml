@@ -129,17 +129,12 @@ jobs:
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.116.0
-      - name: Route image pulls to ECR (ghcr.io is throttled; setup-cli forces ghcr.io)
-        # supabase/setup-cli unconditionally re-exports
-        # SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io via $GITHUB_ENV for CLI
-        # versions >= 1.28.0 (its own src/main.ts, shouldUseGhcrRegistry()) —
-        # a job-level `env:` set before that step runs cannot survive it, but
-        # a later step's $GITHUB_ENV write applies to every step after it, so
-        # this one (placed after setup-cli) wins instead. Verified locally
-        # with a clean image cache: this sequencing actually pulls every
-        # image from public.ecr.aws/supabase/* (the CLI's own upstream
-        # default), not just proves the var is set (2026-09-23).
-        run: echo "SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws" >> "$GITHUB_ENV"
+      - name: Enable Supabase CLI multi-registry image fallback
+        # setup-cli exports SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io for this
+        # pinned CLI. Supabase CLI 2.116.0 treats any non-empty override as
+        # single-registry mode. Clearing it restores the CLI's native ordered
+        # fallback: public ECR -> GHCR -> Docker Hub.
+        run: echo "SUPABASE_INTERNAL_IMAGE_REGISTRY=" >> "$GITHUB_ENV"
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
@@ -157,8 +152,8 @@ jobs:
         # --exclude list, then `npm run e2e:approval -- --reset`, passed all
         # 8 specs (2026-09-23). Excluding unused services reduces startup
         # work, but Supabase bootstrap may still fetch internal images; the
-        # post-setup ECR override is the primary fix and this retry is only
-        # a transient-failure backstop.
+        # native multi-registry fallback is the primary resilience mechanism;
+        # this retry remains only a transient-failure backstop.
         run: |
           for attempt in 1 2 3; do
             if supabase start --exclude realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor; then
@@ -525,19 +520,12 @@ jobs:
       # contention shared across every GitHub Actions run hitting that image
       # worldwide (matches supabase/cli#419 and other public repos hitting
       # the same "toomanyrequests" pulling ghcr.io/supabase/* in Actions).
-      # Authenticating alone was NOT sufficient — still failed after a
-      # successful `docker login ghcr.io` — kept anyway below as harmless
-      # defense-in-depth. The actual fix is forcing
-      # SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws (the CLI's own
-      # upstream default before setup-cli overrides it) — an earlier attempt
-      # at this failed because it was a job-level `env:`, which is evaluated
-      # before any step runs and so is clobbered by supabase/setup-cli's own
-      # later $GITHUB_ENV export; setting it as a step placed AFTER
-      # setup-cli instead wins for every subsequent step, and was verified
-      # locally (clean image cache, `supabase start` genuinely pulled every
-      # image from public.ecr.aws/supabase/*, not just accepted the var).
-      # The container exclusion below is a second, independent improvement —
-      # less to pull either way — not a substitute for the registry fix.
+      # setup-cli exports a GHCR-only registry override. The pinned CLI
+      # 2.116.0 already supports ordered ECR -> GHCR -> Docker Hub fallback
+      # when that override is empty, so this job clears it after setup-cli.
+      # GHCR login remains useful because the second candidate can then use
+      # authenticated package access. The container exclusion below reduces
+      # how many images the job needs to acquire in the first place.
       packages: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -546,11 +534,10 @@ jobs:
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.116.0
-      - name: Route image pulls to ECR (ghcr.io is throttled; setup-cli forces ghcr.io)
-        # See playwright-approval-tenant's identical step for the full
-        # explanation: a job-level `env:` cannot survive supabase/setup-cli's
-        # own later $GITHUB_ENV export, but a step placed after it can.
-        run: echo "SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws" >> "$GITHUB_ENV"
+      - name: Enable Supabase CLI multi-registry image fallback
+        # setup-cli forces GHCR; clearing the override restores the pinned
+        # CLI's built-in ECR -> GHCR -> Docker Hub candidate sequence.
+        run: echo "SUPABASE_INTERNAL_IMAGE_REGISTRY=" >> "$GITHUB_ENV"
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
@@ -560,10 +547,9 @@ jobs:
         # `supabase gen types --db-url` still launches a short-lived
         # postgres-meta:v0.98.0 container in the pinned Supabase CLI 2.116.0,
         # so this job primes that image before generated-type verification.
-        # The ECR override above also disables the CLI's own registry
-        # fallback, so the script prefers ECR and, only if ECR fails or
-        # throttles, pulls the identical upstream mirror from authenticated
-        # GHCR and tags it with the exact name the CLI requests. If both
+        # Keep the existing prewarm as a narrow type-generation backstop:
+        # it prefers ECR and, only if ECR fails or throttles, pulls the same
+        # pinned image from authenticated GHCR and tags the ECR name. If both
         # registries fail, the step fails — the type gate is never skipped.
         run: bash scripts/prime-supabase-pgmeta.sh
       - name: Start local Supabase stack with bounded retry
@@ -577,7 +563,8 @@ jobs:
         # --local` plus the full assertion sequence below (all 20+
         # files/scripts), passed end to end (2026-09-23). The final running
         # stack is DB-only, but Supabase bootstrap may still fetch internal
-        # images while initializing; the ECR override covers those pulls too.
+        # images while initializing; the CLI's native registry fallback covers
+        # those pulls without pinning the whole job to one registry.
         # The retry loop is only a transient-failure backstop.
         run: |
           for attempt in 1 2 3; do
