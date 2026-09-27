@@ -7,6 +7,11 @@ const read = (file: string) => readFileSync(join(root, file), "utf8");
 const pkg = JSON.parse(read("package.json")) as {
   scripts?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  overrides?: Record<string, string>;
+};
+
+const lock = JSON.parse(read("package-lock.json")) as {
+  packages?: Record<string, { name?: string; version?: string }>;
 };
 
 describe("Dotenvx local secrets contract", () => {
@@ -15,14 +20,26 @@ describe("Dotenvx local secrets contract", () => {
     expect(pkg.devDependencies?.dotenv).toBeUndefined();
   });
 
-  it("injects local app secrets through Dotenvx", () => {
-    expect(pkg.scripts?.["dev:ui"]).toMatch(/^dotenvx run --convention=nextjs -- /);
+  it("uses @dotenvx/next-env for Next.js while keeping Dotenvx CLI for non-Next runtimes", () => {
+    expect(pkg.devDependencies?.["@dotenvx/next-env"]).toBe("2.2.3");
+    expect(pkg.overrides?.["@next/env"]).toBe("npm:@dotenvx/next-env");
+    expect(lock.packages?.["node_modules/@next/env"]?.name).toBe("@dotenvx/next-env");
+    expect(lock.packages?.["node_modules/@next/env"]?.version).toBe("2.2.3");
+
+    const nextScripts = {
+      "dev:ui": "node scripts/dev-guard.mjs --port 3000 -- next dev --turbopack",
+      build: "node scripts/dev-guard.mjs --port 3000 --port 4111 -- next build",
+      start: "next start",
+      "dev:e2e": "node scripts/dev-guard.mjs --port 3015 -- next dev --turbopack -p 3015",
+      "start:e2e": "node scripts/dev-guard.mjs --port 3015 -- next start -p 3015",
+    } as const;
+    for (const [name, command] of Object.entries(nextScripts)) {
+      expect(pkg.scripts?.[name]).toBe(command);
+      expect(pkg.scripts?.[name]).not.toContain("dotenvx run");
+    }
+
     expect(pkg.scripts?.["dev:agent"]).toMatch(/^dotenvx run --convention=nextjs -- /);
     expect(pkg.scripts?.channel).toMatch(/^dotenvx run --convention=nextjs -- /);
-    expect(pkg.scripts?.["dev:e2e"]).toMatch(/^dotenvx run --convention=nextjs -- /);
-    expect(pkg.scripts?.["start:e2e"]).toMatch(/^dotenvx run --convention=nextjs -- /);
-    expect(pkg.scripts?.build).toMatch(/^dotenvx run --convention=nextjs -- /);
-    expect(pkg.scripts?.start).toMatch(/^dotenvx run --convention=nextjs -- /);
   });
 
   it("loads Playwright env files through typed Dotenvx imports from the repo root", () => {
