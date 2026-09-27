@@ -88,13 +88,14 @@ If a load-bearing red flag appears, correct the task/architecture before coding.
 ```bash
 npm ci
 
-# Secrets via Infisical — canonical when available
-infisical run --env=dev -- npm run dev:ui     # Next.js :3000
-infisical run --env=dev -- npm run dev:agent  # Mastra :4111
+# Dotenvx is built into the local scripts
+npm run dev:ui     # Next.js :3000
+npm run dev:agent  # Mastra :4111
 
-# Local fallback only when Infisical is unavailable
-npm run dev:ui
-npm run dev:agent
+# Coding agents launch with the separate least-privilege .env.agent; app/test env files stay outside the agent process
+# First-time local setup: cp .env.agent.example .env.agent
+npm run agent:claude
+npm run agent:codex
 ```
 
 Combined `npm run dev` is blocked by **DEV-STAB-001** because of the watcher/fork storm. Do not use `concurrently` for UI + agent.
@@ -284,21 +285,22 @@ Reduce custom code in this order:
 
 Critical API names, versions, auth behavior, RLS assumptions, env keys, and URLs must be verified against current official evidence and installed source/types before implementation.
 
-## Secrets / Infisical
+## Secrets / Dotenvx
 
-- Infisical is the canonical secret-injection path when available.
-- Project binding: `.infisical.json`; it must contain configuration only, never secret values.
-- Use `infisical run --env=dev -- <command>` for secret-dependent commands.
-- Do not read `.env` when Infisical is available.
-- Never print secrets, DB URLs, tokens, passwords, service-role keys, or API keys.
-- Verify only variable names + presence.
-- If a required secret is missing, report the variable name and stop.
-- Never copy another repository's Infisical binding or guess a project ID.
+- Dotenvx is the canonical local secret-injection path. The repo pins `@dotenvx/dotenvx`; do not depend on a developer's global version.
+- `npm run dev:ui`, `npm run dev:agent`, `npm run dev:e2e`, and `npm run channel` inject the Next.js env convention through Dotenvx.
+- `.env.local` is the canonical local app/runtime file. Plain `.env` is retired; if a tool recreates it, migrate required names to their owning file and remove it. `.env.legacy-retired` is encrypted rollback-only state and normal app/test scripts do not load it. `.env.test` owns QA/E2E values. `.env.agent` is a separate least-privilege file for coding-agent credentials and starts empty by default.
+- Production/deployment secrets remain provider-managed (for example Vercel, GitHub Actions, Supabase, or Cloudflare). Local Dotenvx files are not production secret truth.
+- Coding agents must not be launched with the full `.env`/`.env.local`. Use `npm run agent:claude` or `npm run agent:codex`, which load only `.env.agent` and redact exact secret matches from stdout/stderr.
+- `--redact` is output protection, not an authorization boundary: the child process can read values loaded into it. Keep `.env.agent` minimal; service-role keys, database credentials, deployment tokens, and production credentials belong to their owning app/test/provider secret paths instead of `.env.agent`.
+- Real `.env*` files and `.env.keys` stay gitignored. Private keys must be owner-only (`chmod 600`) and must never appear in chat, logs, PRs, Linear, or model context.
+- Never print, echo, `cat`, `dotenvx get`, or otherwise reveal secret values. Verify only variable names + presence.
+- `.infisical.json` is legacy rollback configuration only during migration; it is not the canonical local injection path. Do not delete the remote Infisical project until names-only parity is independently verified.
 
 ### Test credentials (.env.test)
 
 - `.env.test` (gitignored) holds QA credentials (dedicated non-production accounts only) plus test-only settings (`E2E_BASE_URL`, `E2E_SERVER`, opt-in flags); CI uses the same names as GitHub secrets.
-- Exception to "do not read .env": Playwright auto-loads `.env.test`/`.env`; agents may run tests but must never print, echo, or paste their values.
+- Playwright loads `.env.test` plus canonical `.env.local` through Dotenvx; agents may run tests but must never print, echo, or paste their values.
 - Never put passwords/tokens in chat, PRs, Linear, or logs. Use existing QA accounts/session state, or create test users through the normal sign-up flow. If a task seems to need a credential value, stop and ask the user to set it in `.env.test` or CI secrets instead.
 - Check presence by name only. Missing → report the name and stop.
 - `E2E_BASE_URL` may only be localhost or an iPix Vercel Preview, never Production. If a Production check is needed, ask the user first; the production smoke suite is separate.
