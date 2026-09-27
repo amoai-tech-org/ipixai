@@ -161,7 +161,7 @@ Two concrete, verified risks to design against, not hypothetical:
 
 ## 19. Security
 
-No change to iPix's threat model. Any new Mastra deployment surface (Phase 1+) needs the same secrets handling as `AGENTS.md § Secrets / Infisical` — do not duplicate that policy here.
+No change to iPix's threat model. Any new Mastra deployment surface (Phase 1+) needs the same secrets handling as `AGENTS.md § Secrets / Dotenvx` — do not duplicate that policy here.
 
 ## 20. Migration strategy
 

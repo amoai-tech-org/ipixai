@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -87,5 +87,29 @@ describe("Dotenvx local secrets contract", () => {
     expect(agents).toContain("Dotenvx is the canonical local secret-injection path");
     expect(agents).toContain("Production/deployment secrets remain provider-managed");
     expect(agents).not.toContain("Infisical is the canonical secret-injection path");
+  });
+
+  it("retires the local Infisical rollback binding after names-only parity", () => {
+    expect(existsSync(join(root, ".infisical.json"))).toBe(false);
+    expect(read("AGENTS.md")).not.toContain(".infisical.json");
+  });
+
+  it("keeps active Supabase verification guidance off retired Infisical and removed npm scripts", () => {
+    const activeGuides = [
+      ".claude/skills/worktrees/SKILL.md",
+      ".claude/skills/ipix-supabase/SKILL.md",
+      ".claude/skills/ipix-supabase/references/migrations/scaffold.md",
+      ".claude/skills/ipix-supabase/references/tables-overview.md",
+      ".claude/skills/ipix-supabase/references/edge-functions/edge-functions-inventory.md",
+      ".claude/skills/linear/SKILL.md",
+      "Universal-design-prompt-4/tasks/checklists.md",
+      "Universal-design-prompt-4/tasks/README.md",
+      "Universal-design-prompt-4/docs/design-docs/plan/TASK-CONTRACT.yaml",
+    ];
+    for (const file of activeGuides) {
+      const source = read(file);
+      expect(source).not.toContain("infisical run");
+      expect(source).not.toContain("npm run supabase:verify-rls");
+    }
   });
 });

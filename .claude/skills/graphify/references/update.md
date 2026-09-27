@@ -215,23 +215,26 @@ graphify cluster-only .
 
 `graphify label` is a separate standalone CLI command (not a pipeline step) that re-runs only the naming pass on the current graph — use it when community names went stale (e.g. after `graphify update` changed the community set) but you don't need a full re-cluster. It needs an LLM backend; **this is the CLI's own `--backend` flag (`gemini|kimi|claude|openai|deepseek|ollama`), a different mechanism from Part B's host-agent semantic extraction** — `graphify label` always shells out to a real API, it never falls back to the running agent as the LLM.
 
-If `GEMINI_API_KEY`/`GOOGLE_API_KEY` is set, plain `graphify label` just works. If Gemini is unavailable (e.g. prepaid credits exhausted) but this project's Infisical `dev` env has `NVIDIA_API_KEY`, route through the `openai` backend at NVIDIA's OpenAI-compatible endpoint instead of installing a new provider SDK:
+If `GEMINI_API_KEY`/`GOOGLE_API_KEY` is set, plain `graphify label` just works. If Gemini is unavailable but local encrypted `.env.local` has `NVIDIA_API_KEY`, inject it with Dotenvx and route through Graphify's `openai` backend at NVIDIA's OpenAI-compatible endpoint instead of printing/copying the key or installing a new provider SDK:
 
 ```bash
-NVIDIA_KEY="$(infisical run --env=dev -- printenv NVIDIA_API_KEY 2>/dev/null)"
-OPENAI_API_KEY="$NVIDIA_KEY" \
-OPENAI_BASE_URL="https://integrate.api.nvidia.com/v1" \
-OPENAI_MODEL="meta/llama-3.2-11b-vision-instruct" \
-graphify label --backend openai
+dotenvx run --convention=nextjs -- sh -c '
+  OPENAI_API_KEY="$NVIDIA_API_KEY" \
+  OPENAI_BASE_URL="https://integrate.api.nvidia.com/v1" \
+  OPENAI_MODEL="meta/llama-3.2-11b-vision-instruct" \
+  graphify label --backend openai
+'
 ```
 
 Notes from getting this working (2026-09-07):
 - The `openai` backend requires the `openai` pip extra: `uv tool install "graphifyy[openai]" --force` (or `pip install openai`) if you see `the 'openai' package is required for this backend but is not installed`.
 - NVIDIA's catalog churns — `meta/llama-3.3-70b-instruct` and the `nvidia/llama-3.1-nemotron-*`/`nvidia/nemotron-*` family 404'd or 410'd (EOL'd/not provisioned) for this account's key. Before trusting a model id, verify it's actually live for the key in hand:
   ```bash
-  curl -s -o /dev/null -w "%{http_code}\n" https://integrate.api.nvidia.com/v1/chat/completions \
-    -H "Authorization: Bearer $NVIDIA_KEY" -H "Content-Type: application/json" \
-    -d '{"model":"<candidate-id>","messages":[{"role":"user","content":"say hi"}],"max_tokens":5}'
+  dotenvx run --convention=nextjs -- sh -c '
+    curl -s -o /dev/null -w "%{http_code}\n" https://integrate.api.nvidia.com/v1/chat/completions \
+      -H "Authorization: Bearer $NVIDIA_API_KEY" -H "Content-Type: application/json" \
+      -d '"'"'{"model":"<candidate-id>","messages":[{"role":"user","content":"say hi"}],"max_tokens":5}'"'"'
+  '
   ```
   `200` = usable, `404`/`410` = try another (list candidates via `GET /v1/models`). `meta/llama-3.2-11b-vision-instruct` was confirmed live and used successfully for a 1,505-community relabel.
 - This model is slower than Gemini for this workload — the 16-batch relabel ran past 2 minutes; run it with `run_in_background`/`Monitor` rather than a blocking call.

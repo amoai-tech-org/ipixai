@@ -99,7 +99,7 @@ Old operator repo (read-only reference): `/home/sk/ipix/supabase/`
 
 1. Prefer the **Supabase plugin/MCP for read-only live inspection** when it is confirmed on `nvdlhrodvevgwdsneplk`; record the project ref in evidence.
 2. Use **local CLI + Docker** for migration replay and destructive testing. Use `--linked` only for explicit read-only state checks such as migration listing/lint/dry-run.
-3. **`npm run supabase:verify-rls`** after every RLS change when the script exists; also run the affected targeted SQL tests. Do not hard-code a check count because the suite evolves.
+3. After every RLS change, fresh-replay locally and run the affected targeted SQL/security tests from `references/verification-matrix.md`. CI `supabase-fresh-replay` is the global reproducibility gate; do not depend on removed `supabase:verify-*` npm scripts.
 4. Cursor **`user-supabase` MCP** may show legacy Medellín/FashionOS objects — **ignore** unless MCP is confirmed on `nvdlhrodvevgwdsneplk`.
 5. Never treat plugin/CLI permission errors as permission to change production manually; change verification method or escalate.
 6. **To deploy an Edge Function, use the CLI: `supabase functions deploy <name> --project-ref nvdlhrodvevgwdsneplk`** from the exact reviewed/merged source already checked out locally. Do **not** hand-bundle a function's files through the MCP `deploy_edge_function` tool — that tool takes an inline file array, which means manually resolving the function's entire relative-import dependency closure yourself (every `_shared/` file it touches, transitively) and re-typing each file's content into the call. It's slow, and one missed or mistyped file produces a silent runtime bug instead of a bundle error. The CLI resolves imports itself from the real files on disk, including dependencies outside `supabase/` (see the dependency gotcha above). (IPI-1093 post-merge deploy, 2026-09-12 — the MCP path took ~20 tool calls and a manual dependency-closure script for one function; the CLI took one command.)
@@ -186,7 +186,7 @@ Do **not** rewrite applied remote history. Local Docker/fresh replay is now an a
 ## Core principles
 
 1. **Database is source of truth.** RLS enforces this — not frontend state.
-2. **Verify, don't assume.** Run advisors + `verify-rls` before declaring done.
+2. **Verify, don't assume.** Run fresh replay, affected targeted SQL/security tests, and applicable Advisors before declaring done.
 3. **Service-role key never reaches the browser.** Edge functions / CLI only. No `VITE_*`.
 4. **Every new iPix table has RLS.** No exceptions in `public`.
 5. **Use `(select auth.uid())` / `(select auth.jwt())` when row-independent** so Postgres can initPlan/cache them per statement; do not wrap row-dependent functions blindly.
@@ -306,7 +306,7 @@ Legacy FashionOS `storage` buckets and shoot-scoped RLS remain — extend with b
 - [ ] RLS/grants changes include allowed + denied role/tenant cases; UPDATE checks old and resulting row where ownership can change.
 - [ ] SECURITY DEFINER / public RPC / view exposure is explicitly classified and ACL/search-path/security-invoker state proved where applicable.
 - [ ] `npm run supabase:types` if exposed schema changed.
-- [ ] `npm run supabase:verify-rls` and affected targeted SQL tests pass when applicable.
+- [ ] Affected targeted RLS/grant/SQL security tests pass; CI `supabase-fresh-replay` remains the global reproducibility gate.
 - [ ] Fresh replay also passes `supabase/tests/security/catalog-security-regression.sql`; any exception is exact and reviewed, not a weakened global rule.
 - [ ] Security + performance Advisors reviewed; findings are triaged, not blindly fixed.
 - [ ] No service role or Gemini key in client bundle.
@@ -361,7 +361,7 @@ Use `tasks` for task/PR lifecycle orchestration; keep Supabase implementation an
 
 - Routed to correct topic file(s)
 - iPix project ref respected; verified via local fresh-replay; for any `supabase/migrations/**` change, explicit human approval was obtained *before* merge (merge itself applies to production — IPI-1171) and that approval is recorded; no manual destructive command (`db push --linked`, `migration repair`, `db reset --linked`) run outside that approved path
-- RLS verify run after policy changes
+- Local fresh replay + affected targeted RLS/grant tests run after policy changes
 - Inventory updated after edge function add/remove
 
 

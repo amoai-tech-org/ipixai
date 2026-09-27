@@ -21,7 +21,7 @@
 - Existing Sentry project: `ipix-wc/ipixai`, project ID `4512055224827904`.
 - Historical Sentry data proves an older SDK setup sent events, sessions, replays, logs, and releases.
 - Current Vercel project `ipixai` has no `SENTRY_*` environment variables.
-- `.env.sentry-build-plugin` exists locally, is ignored by Git, and contains a build auth token.
+- The legacy `.env.sentry-build-plugin` fallback was removed after a real Dotenvx-injected build successfully uploaded source maps to Sentry on 2026-09-27.
 - Current Sentry issues are development/test events; no verified current production telemetry exists.
 
 ## Current → target architecture

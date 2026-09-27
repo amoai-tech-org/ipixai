@@ -187,7 +187,7 @@ All verification checklists: [`checklists.md`](./checklists.md)
 
 1. Verify React implementation exists — grep `app/src/app`
 2. Verify against design DC in `Universal-design-prompt-new/Pages/`
-3. Verify Supabase via MCP or `npm run supabase:verify-rls`
+3. Verify live Supabase read-only via MCP when needed; for migration/RLS changes run local fresh replay (`supabase start` + `supabase db reset --local`) plus affected targeted SQL/security tests.
 4. Reuse existing components, providers, agents
 5. Load skills: `design-to-production`, `ipix-supabase`, `mastra`, `copilotkit`, `worktrees`, `task-verifier`
 6. One concern per PR · worktree branch `ipi/<id>-slug`

@@ -142,12 +142,13 @@ For generated Linear content, return a ready-to-paste issue/project spec with ti
 Use project-specific commands from the active workspace. For iPix platform work, typical gates are:
 
 ```bash
-npm run lint
-npm run build
 npm run test
-npm run supabase:verify
-npm run supabase:verify-rls
-npm run supabase:verify-edge
+npm run typecheck
+npm run build
+# For migration/RLS work:
+supabase start
+supabase db reset --local
+# Then run affected targeted SQL/security tests.
 ```
 
-Run only the commands relevant to the touched area. Do not run Supabase local Docker commands for iPix MVP work.
+Run only the commands relevant to the touched area. Use local Supabase/Docker for destructive migration verification; use live Supabase only for explicit read-only inspection unless an approved task says otherwise.

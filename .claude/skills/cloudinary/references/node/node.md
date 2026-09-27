@@ -42,7 +42,7 @@ cloudinary.config({
 });
 ```
 
-Prefer `CLOUDINARY_URL` env var or Infisical-injected secrets — never expose
+Prefer server-only environment variables injected by local Dotenvx or the deployment provider — never expose
 `api_secret` client-side.
 
 ## Reference map — load on demand
@@ -68,5 +68,5 @@ Prefer `CLOUDINARY_URL` env var or Infisical-injected secrets — never expose
 
 ## iPix note
 
-- `CLOUDINARY_*` / upload secrets: Infisical or server env only — never in `app/` client bundles.
+- `CLOUDINARY_*` / upload secrets: local Dotenvx or provider-managed server env only — never in client bundles.
 - Signed upload routes belong in Next.js Route Handlers or edge functions, not browser code.
