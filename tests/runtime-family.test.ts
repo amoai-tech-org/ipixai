@@ -79,7 +79,7 @@ const CORE_MEMORY_TABLES = [
 ] as const;
 
 describe("IPI-1042 runtime family", () => {
-  it("pins the peer-compatible Mastra 1.63.2 family", () => {
+  it("pins the peer-compatible Mastra 1.71.0 family", () => {
     const pg = require("@mastra/pg/package.json") as {
       name: string;
       version: string;
@@ -93,17 +93,17 @@ describe("IPI-1042 runtime family", () => {
     const copilot = require("@copilotkit/runtime/package.json") as { version: string };
 
     expect(pg.name).toBe("@mastra/pg");
-    expect(pg.version).toBe("1.22.2");
-    expect(core.version).toBe("1.63.2");
-    expect(memory.version).toBe("1.28.1");
-    expect(client.version).toBe("1.42.4");
-    expect(cli.version).toBe("1.27.2");
+    expect(pg.version).toBe("1.27.1");
+    expect(core.version).toBe("1.71.0");
+    expect(memory.version).toBe("1.32.1");
+    expect(client.version).toBe("1.50.0");
+    expect(cli.version).toBe("1.31.3");
     expect(agui.version).toBe("1.1.4");
     expect(copilot.version).toBe("1.73.3");
 
     const peer = pg.peerDependencies?.["@mastra/core"];
     expect(peer).toBeTruthy();
-    expect(coreSatisfiesMastraPeer("1.63.2", peer ?? "")).toBe(true);
+    expect(coreSatisfiesMastraPeer("1.71.0", peer ?? "")).toBe(true);
     expect(coreSatisfiesMastraPeer("1.63.0", peer ?? "")).toBe(false);
   });
 
@@ -124,7 +124,7 @@ describe("IPI-1042 runtime family", () => {
     }
   });
 
-  it("can import PostgresStore from @mastra/pg@1.22.2", async () => {
+  it("can import PostgresStore from @mastra/pg@1.27.1", async () => {
     const mod = await import("@mastra/pg");
     expect(typeof mod.PostgresStore).toBe("function");
   });
@@ -168,7 +168,7 @@ describe("IPI-1042 runtime family", () => {
     expect(memory).toBeDefined();
   });
 
-  it("core memory tables still exist in 1.63.2 TABLE_SCHEMAS and the recorded catalog", () => {
+  it("core memory tables still exist in 1.71.0 TABLE_SCHEMAS and the recorded catalog", () => {
     const schemaTables = new Set(Object.keys(TABLE_SCHEMAS));
     for (const table of CORE_MEMORY_TABLES) {
       expect(schemaTables.has(table), table).toBe(true);

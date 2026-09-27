@@ -13,8 +13,8 @@ afterEach(async () => {
 describe("Sentry Mastra observability contract", () => {
   it("installs the compatible Mastra observability package", () => {
     const pkg = JSON.parse(read("package.json")) as { dependencies?: Record<string, string> };
-    expect(pkg.dependencies?.["@mastra/core"]).toBe("1.63.2");
-    expect(pkg.dependencies?.["@mastra/observability"]).toBe("1.18.0");
+    expect(pkg.dependencies?.["@mastra/core"]).toBe("1.71.0");
+    expect(pkg.dependencies?.["@mastra/observability"]).toBe("1.18.1");
     expect(pkg.dependencies?.["@sentry/node"]).toBe("11.0.0");
   });
 
