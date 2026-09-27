@@ -121,6 +121,36 @@ async function roundTrip(requestContext: RequestContext | undefined): Promise<Ro
   return { result, restored: restoredAfterResume };
 }
 
+/**
+ * Drive the REAL resume wrapper and return the `activeTools` its forwarded
+ * `prepareStep` resolves from the given context.
+ *
+ * Using the engine-restored context HERE is the whole point: reading the
+ * restored context directly would not exercise the gate at all, so the test
+ * would pass even if the wrapper stopped consulting the restored policy.
+ * No explicit `activeTools` is passed, so the wrapper must recover the policy
+ * from the restored context rather than being told what to use.
+ */
+async function resolveActiveToolsOnResume(
+  restored: RequestContext | undefined,
+): Promise<unknown> {
+  const calls: unknown[][] = [];
+  const resume = wrapPlannerResumeStreamWithToolGate(
+    (data: unknown, options: Record<string, unknown>) => {
+      calls.push([data, options]);
+      return "resume-result";
+    },
+  );
+  resume({ approved: true }, { runId: "roundtrip-run", requestContext: restored });
+
+  const options = calls[0]?.[1] as Record<string, unknown>;
+  const prepareStep = options.prepareStep as (args: {
+    requestContext?: RequestContext;
+  }) => Record<string, unknown> | Promise<Record<string, unknown>>;
+  const prepared = await prepareStep({ requestContext: restored });
+  return prepared.activeTools;
+}
+
 describe("IPI-1332 planner tool policy survives a real Mastra suspend/resume", () => {
   it("keeps a persisted brand policy readable after a real resume", async () => {
     const persisted = persistPolicyFor([{ role: "user", content: "Start a brand analysis" }]);
@@ -129,55 +159,46 @@ describe("IPI-1332 planner tool policy survives a real Mastra suspend/resume", (
 
     const { result, restored } = await roundTrip(persisted);
 
+    // 1. The ENGINE preserved the raw policy across a real suspend/resume: this
+    //    value was read inside the resumed step from the restored context.
     expect(result.result?.policyAfterResume).toEqual([...ALL_AGENT_TOOLS]);
 
-    // Guard against a false green: the resumed step must be reading a context
-    // the ENGINE restored, not the same object handed to start(). If these were
-    // the same instance the test would prove nothing about serialization.
+    // 2. Guard against a false green: the resumed step must be reading a context
+    //    the ENGINE reconstructed, not the same object handed to start(). If
+    //    these were the same instance the test would prove nothing about
+    //    serialization.
     expect(restored).toBeDefined();
     expect(restored).not.toBe(persisted);
     expect(restored?.getRaw(POLICY_KEY)).toBeDefined();
 
-    // And the gate still resolves brand tools from the engine-restored context.
-    const resume = wrapPlannerResumeStreamWithToolGate(
-      (_data: unknown, _options: Record<string, unknown>) => "resume-result",
-    );
-    resume({ approved: true }, { runId: "roundtrip-run" });
-    expect(readPolicy(restored)).toEqual([...ALL_AGENT_TOOLS]);
+    // 3. And the GATE itself resolves brand tools from that restored context.
+    expect(await resolveActiveToolsOnResume(restored)).toEqual([...ALL_AGENT_TOOLS]);
   });
 
   it("keeps a persisted planning policy planning-only after a real resume", async () => {
     const persisted = persistPolicyFor([{ role: "user", content: "Plan a campaign shoot" }]);
     expect(readPolicy(persisted)).toEqual([...PLANNING_ONLY_TOOLS]);
 
-    const { result } = await roundTrip(persisted);
+    const { result, restored } = await roundTrip(persisted);
 
     expect(result.result?.policyAfterResume).toEqual([...PLANNING_ONLY_TOOLS]);
-    expect(result.result?.policyAfterResume).not.toContain("approveDraft");
-    expect(result.result?.policyAfterResume).not.toContain("startBrandAnalysis");
+
+    const resolved = await resolveActiveToolsOnResume(restored);
+    expect(resolved).toEqual([...PLANNING_ONLY_TOOLS]);
+    expect(resolved).not.toContain("approveDraft");
+    expect(resolved).not.toContain("startBrandAnalysis");
   });
 
   it("fails closed to planning-only tools when no policy was ever persisted", async () => {
-    const { result } = await roundTrip(undefined);
+    const { result, restored } = await roundTrip(undefined);
 
     // Nothing was persisted, and the engine must not invent one.
     expect(result.result?.policyAfterResume).toBeNull();
 
-    // The gate therefore resolves the fail-closed planning-only set.
-    const resumeCalls: unknown[][] = [];
-    const resume = wrapPlannerResumeStreamWithToolGate(
-      (data: unknown, options: Record<string, unknown>) => {
-        resumeCalls.push([data, options]);
-        return "resume-result";
-      },
-    );
-    resume({ approved: true }, { runId: "roundtrip-run" });
-    const options = resumeCalls[0]?.[1] as Record<string, unknown>;
-    const prepareStep = options.prepareStep as (args: {
-      requestContext?: RequestContext;
-    }) => Record<string, unknown> | Promise<Record<string, unknown>>;
-    const prepared = await prepareStep({ requestContext: new RequestContext() });
-
-    expect(prepared.activeTools).toEqual([...PLANNING_ONLY_TOOLS]);
+    // The gate therefore fails closed to the planning-only set.
+    expect(await resolveActiveToolsOnResume(restored)).toEqual([...PLANNING_ONLY_TOOLS]);
+    expect(await resolveActiveToolsOnResume(new RequestContext())).toEqual([
+      ...PLANNING_ONLY_TOOLS,
+    ]);
   });
 });
