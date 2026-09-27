@@ -25,18 +25,21 @@ describe("Dotenvx local secrets contract", () => {
     expect(pkg.scripts?.start).toMatch(/^dotenvx run --convention=nextjs -- /);
   });
 
-  it("loads Playwright env files through Dotenvx so encryption remains readable", () => {
+  it("loads Playwright env files through typed Dotenvx imports from the repo root", () => {
     for (const file of ["playwright.config.ts", "playwright.production.config.ts"]) {
       const source = read(file);
-      expect(source).toContain('from "@dotenvx/dotenvx"');
+      expect(source).toContain('import process from "node:process"');
+      expect(source).toContain('import { config as loadDotenvx } from "@dotenvx/dotenvx"');
+      expect(source).not.toContain('import dotenvx from "@dotenvx/dotenvx"');
+      expect(source).not.toContain("__dirname");
       expect(source).not.toContain('from "dotenv"');
     }
   });
 
   it("loads the app fallback from .env.local, not transitional .env", () => {
     const source = read("playwright.config.ts");
-    expect(source).toContain('path.resolve(__dirname, ".env.local")');
-    expect(source).not.toContain('path.resolve(__dirname, ".env")');
+    expect(source).toContain('path.resolve(process.cwd(), ".env.local")');
+    expect(source).not.toContain('path.resolve(process.cwd(), ".env")');
   });
 
   it("surfaces missing local Playwright env files outside CI while CI stays file-optional", () => {
