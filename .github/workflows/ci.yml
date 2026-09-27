@@ -552,6 +552,11 @@ jobs:
         # pinned image from authenticated GHCR and tags the ECR name. If both
         # registries fail, the step fails — the type gate is never skipped.
         run: bash scripts/prime-supabase-pgmeta.sh
+      - name: Prime Postgres image for local stack
+        # The registry override disables Supabase CLI's built-in mirror
+        # fallback. Prime the exact Postgres tag needed by CLI 2.116.0 so an
+        # ECR rate limit can fall back to the already-authenticated GHCR mirror.
+        run: bash scripts/prime-supabase-postgres.sh
       - name: Start local Supabase stack with bounded retry
         # This job is DB-only. Most assertions are raw `psql`/`pg` against
         # port 54322. `supabase gen types --db-url` still runs a short-lived

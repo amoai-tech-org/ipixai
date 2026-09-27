@@ -55,8 +55,8 @@ next-env.d.ts
 
 .mastra/
 
-# Graphify extract cache (keep graph.json / GRAPH_REPORT.md)
-graphify-out/cache/
+# Graphify generated local analysis state
+graphify-out/
 
 
 # Local Mastra/CopilotKit reference clones (see github/mastra/mastra-repos.md)
