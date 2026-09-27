@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -87,5 +87,10 @@ describe("Dotenvx local secrets contract", () => {
     expect(agents).toContain("Dotenvx is the canonical local secret-injection path");
     expect(agents).toContain("Production/deployment secrets remain provider-managed");
     expect(agents).not.toContain("Infisical is the canonical secret-injection path");
+  });
+
+  it("retires the local Infisical rollback binding after names-only parity", () => {
+    expect(existsSync(join(root, ".infisical.json"))).toBe(false);
+    expect(read("AGENTS.md")).not.toContain(".infisical.json");
   });
 });

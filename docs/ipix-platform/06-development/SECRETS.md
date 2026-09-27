@@ -119,4 +119,4 @@ This table is names-only. No value from the legacy file is authoritative merely 
 4. Keep `.env.agent` minimal; an empty mode-600 file is valid and injects zero secrets.
 5. `.env.local`, `.env.test`, and `.env.legacy-retired` are encrypted; `.env.keys` is mode 600 and never committed.
 6. Sentry source-map upload is verified through Dotenvx-injected `SENTRY_AUTH_TOKEN`; the legacy `.env.sentry-build-plugin` fallback is retired.
-7. Retain `.infisical.json` only as rollback metadata until names-only parity is independently verified; do not use it as local secret truth.
+7. Infisical names-only parity was verified on 2026-09-27: the `dev` inventory had 71 names; `MASTRA_DATABASE_URL` and `IPIX_MASTRA_HOSTED` remain provider-managed in Vercel Production, while the other Infisical-only names are stale E2E aliases or tooling/retired names with no local runtime ownership. The legacy local Infisical binding is retired; Dotenvx remains local truth.
