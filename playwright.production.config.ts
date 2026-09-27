@@ -1,9 +1,11 @@
-import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
-import dotenv from "dotenv";
+import { config as loadDotenvx } from "@dotenvx/dotenvx";
 
-const envTestPath = path.resolve(__dirname, ".env.test");
-const environment = dotenv.config({ path: envTestPath });
+const envTestPath = ".env.test";
+// Intentionally do not ignore MISSING_ENV_FILE: production smoke requires the local
+// .env.test source and fails closed through environment.error below.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- @dotenvx/dotenvx@2.30.0 publishes config() types; Codacy does not resolve them in this config.
+const environment = loadDotenvx({ path: envTestPath, quiet: true });
 const qaEmail = environment.parsed?.E2E_TEST_EMAIL;
 const qaPassword = environment.parsed?.E2E_TEST_PASSWORD;
 
