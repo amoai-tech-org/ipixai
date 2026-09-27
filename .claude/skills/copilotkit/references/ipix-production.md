@@ -58,7 +58,7 @@ The operator app at **www.ipix.co/app** uses CopilotKit for the right-hand AI ch
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Auth + edge function calls |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Browser Supabase client |
 
-Sync from Infisical; never commit tokens. Local dev: `app/.env.local`.
+Production secrets are provider-managed; never commit tokens. Local dev uses encrypted `.env.local` through Dotenvx.
 
 ## How auth + CopilotKit interact
 
@@ -79,7 +79,7 @@ Sign in → session cookie set
 | `/info` reports `mode: "sse"` | Expected — the Product Planner is in-process (IPI-1329) | None |
 | Reload loses the Planner conversation | Mastra Postgres storage not reachable/configured | Check `MASTRA_DATABASE_URL` and Vercel runtime logs; do not add an Intelligence key |
 | `Invalid CopilotKit license token` banner | `COPILOTKIT_LICENSE_TOKEN` present with a garbage/wrong-format value (e.g. a `ck_pub_...` Cloud public key) | Remove `COPILOTKIT_LICENSE_TOKEN` — managed mode doesn't need it |
-| Chat works locally, not prod | Env missing on Vercel | Redeploy after Infisical sync |
+| Chat works locally, not prod | Env missing on Vercel | Redeploy after updating the Vercel/provider environment |
 
 ## Code pointers
 

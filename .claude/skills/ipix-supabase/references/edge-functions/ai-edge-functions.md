@@ -40,7 +40,7 @@ There is **no Anthropic / Claude API in production** — Claude is only used in 
 
 Do not reference these as deployed until `supabase/functions/<name>/` exists.
 
-**Auth:** `GEMINI_API_KEY` secret in Supabase dashboard (synced from Infisical — see [`mde-infisical/references/env-vars-mdeai.md`](../../mde-infisical/references/env-vars-mdeai.md)).
+**Auth:** `GEMINI_API_KEY` is a Supabase Edge Function/provider-managed secret. Local Dotenvx files are not the deployed Edge Function secret store.
 
 **Full matrix** (tickets, webhooks, `verify_jwt`): [edge-functions-inventory.md](edge-functions-inventory.md).
 

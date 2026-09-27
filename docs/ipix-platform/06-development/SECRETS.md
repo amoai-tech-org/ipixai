@@ -21,7 +21,6 @@ flowchart LR
 | `.env.local` | Canonical local Next.js/Mastra runtime | Encrypted local application values. Never launch a coding agent with this whole file. |
 | `.env` | Retired | Must not exist after cutover. If a tool recreates it, migrate the required names to their owning file and remove it. |
 | `.env.legacy-retired` | Encrypted rollback archive | Historical local `.env` snapshot for rollback only; never loaded by normal app/test commands. |
-| `.env.sentry-build-plugin` | Legacy Sentry build fallback | Currently only duplicates `SENTRY_AUTH_TOKEN`; `next.config.ts` reads the normal process env. Add no new secrets here and remove only after a real source-map upload smoke passes through Dotenvx. |
 | `.env.test` | Playwright/E2E | QA accounts and test-only flags only. |
 | `.env.agent` | Coding-agent process | Least privilege; starts empty. Add only a credential required for that session. |
 | `.env.example` | Documentation | Names/examples only; tracked. |
@@ -118,6 +117,6 @@ This table is names-only. No value from the legacy file is authoritative merely 
 2. Use Dotenvx for local UI, Mastra, channel, and E2E dev-server injection.
 3. Playwright loads encrypted `.env.test` plus canonical `.env.local`; plain `.env` is retired.
 4. Keep `.env.agent` minimal; an empty mode-600 file is valid and injects zero secrets.
-5. `.env.local`, `.env.test`, `.env.legacy-retired`, and the temporary Sentry fallback are encrypted; `.env.keys` is mode 600 and never committed.
-6. Verify a real Sentry source-map upload with `SENTRY_AUTH_TOKEN` injected through Dotenvx, then remove `.env.sentry-build-plugin`. Current production build passes but emits no observable upload proof, so the encrypted fallback remains.
+5. `.env.local`, `.env.test`, and `.env.legacy-retired` are encrypted; `.env.keys` is mode 600 and never committed.
+6. Sentry source-map upload is verified through Dotenvx-injected `SENTRY_AUTH_TOKEN`; the legacy `.env.sentry-build-plugin` fallback is retired.
 7. Retain `.infisical.json` only as rollback metadata until names-only parity is independently verified; do not use it as local secret truth.

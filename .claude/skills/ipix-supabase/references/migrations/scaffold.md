@@ -43,9 +43,9 @@ former `create-migration` skill.
 
 6. **Push and regen types:**
    ```bash
-   infisical run -- npm run supabase:push
+   dotenvx run --convention=nextjs -- npm run supabase:push
    npm run supabase:types
-   infisical run -- npm run supabase:verify-rls
+   dotenvx run --convention=nextjs -- npm run supabase:verify-rls
    ```
 
 ## iPix conventions

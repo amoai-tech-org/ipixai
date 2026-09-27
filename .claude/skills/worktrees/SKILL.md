@@ -60,8 +60,8 @@ cd app && npm ci && cd ..
 | Changed | Commands |
 |---------|----------|
 | **`app/**`** (most iPix tasks) | `cd app && npm ci && npm run lint && npm run typecheck && npm test` · `npm run build` when routes/config/env/middleware touched |
-| **`supabase/**`** | `infisical run -- npm run supabase:verify` · `infisical run -- npm run supabase:verify-rls` (+ conditional scripts per matrix) |
-| **Legacy `src/**`** (retiring) | `infisical run -- npm run build && npm run test` |
+| **`supabase/**`** | `dotenvx run --convention=nextjs -- npm run supabase:verify` · `dotenvx run --convention=nextjs -- npm run supabase:verify-rls` (+ conditional scripts per matrix) |
+| **Legacy `src/**`** (retiring) | `npm run build && npm run test` |
 | **Docs-only** | No app build required — still run [forensic audit](references/ipix-ops.md#forensic-audit) |
 
 > Root `package.json` has **no** `lint`/`test`/`build` — those live under `app/`. Pre-push hook runs root typecheck/tests only where configured; **operator PRs gate on `app/` scripts.**
@@ -81,7 +81,7 @@ Always-on guardrails for iPix worktree work. Command recipes for the longer ones
 Before opening a PR, merging, or flipping a task to Done — all must hold, or it's "looks done" but broken:
 
 - [ ] Area verify matrix green ([tasks pre-merge-tests](../tasks/references/pre-merge-tests.md)) — typically `cd app && lint · typecheck · test` (+ build if applicable)
-- [ ] Supabase verify when `supabase/**` touched (`infisical run -- npm run supabase:verify*`)
+- [ ] Supabase verify when `supabase/**` touched (`dotenvx run --convention=nextjs -- npm run supabase:verify*`)
 - [ ] [Forensic audit](references/ipix-ops.md#forensic-audit) clean — no unexpected dirty or untracked files
 - [ ] [Production SHA check](references/ipix-ops.md#production-sha-check) — base is current `origin/main`, local `main` not diverged
 - [ ] No leaked dirs in the diff (see Leak guard below)

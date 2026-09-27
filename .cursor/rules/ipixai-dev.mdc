@@ -45,5 +45,5 @@ Historical evidence: `docs/archive/cursor/linux-audit.md`.
 
 ## Secrets
 
-- `.env` is gitignored. Never print API keys.
-- This repo is **not** wired to old Infisical/`cd app` commands until `.infisical.json` exists.
+- `.env.local` is the canonical local app/runtime file and is gitignored. Never print API keys.
+- Local app commands use the repo-pinned Dotenvx workflow; deployment secrets stay in their provider secret stores.

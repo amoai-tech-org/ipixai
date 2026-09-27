@@ -167,9 +167,9 @@ graphify explain "<concept>"
 
 Use `graphify-out/wiki/index.md` for broad navigation when present. Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review or when query/path/explain are insufficient. After modifying code, run `graphify update .` when appropriate to keep the graph current.
 
-## Secrets / Infisical
+## Secrets / Dotenvx
 
-Follow `AGENTS.md` § Secrets / Infisical as the repository source of truth. Do not duplicate or weaken it here.
+Follow `AGENTS.md` § Secrets / Dotenvx as the repository source of truth. Do not duplicate or weaken it here.
 
 ## Response style
 

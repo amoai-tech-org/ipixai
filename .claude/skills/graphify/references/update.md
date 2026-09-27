@@ -215,14 +215,15 @@ graphify cluster-only .
 
 `graphify label` is a separate standalone CLI command (not a pipeline step) that re-runs only the naming pass on the current graph — use it when community names went stale (e.g. after `graphify update` changed the community set) but you don't need a full re-cluster. It needs an LLM backend; **this is the CLI's own `--backend` flag (`gemini|kimi|claude|openai|deepseek|ollama`), a different mechanism from Part B's host-agent semantic extraction** — `graphify label` always shells out to a real API, it never falls back to the running agent as the LLM.
 
-If `GEMINI_API_KEY`/`GOOGLE_API_KEY` is set, plain `graphify label` just works. If Gemini is unavailable (e.g. prepaid credits exhausted) but this project's Infisical `dev` env has `NVIDIA_API_KEY`, route through the `openai` backend at NVIDIA's OpenAI-compatible endpoint instead of installing a new provider SDK:
+If `GEMINI_API_KEY`/`GOOGLE_API_KEY` is set, plain `graphify label` just works. If Gemini is unavailable but local encrypted `.env.local` has `NVIDIA_API_KEY`, inject it with Dotenvx and route through Graphify's `openai` backend at NVIDIA's OpenAI-compatible endpoint instead of printing/copying the key or installing a new provider SDK:
 
 ```bash
-NVIDIA_KEY="$(infisical run --env=dev -- printenv NVIDIA_API_KEY 2>/dev/null)"
-OPENAI_API_KEY="$NVIDIA_KEY" \
-OPENAI_BASE_URL="https://integrate.api.nvidia.com/v1" \
-OPENAI_MODEL="meta/llama-3.2-11b-vision-instruct" \
-graphify label --backend openai
+dotenvx run --convention=nextjs -- bash -lc '
+  OPENAI_API_KEY="$NVIDIA_API_KEY" \
+  OPENAI_BASE_URL="https://integrate.api.nvidia.com/v1" \
+  OPENAI_MODEL="meta/llama-3.2-11b-vision-instruct" \
+  graphify label --backend openai
+'
 ```
 
 Notes from getting this working (2026-09-07):

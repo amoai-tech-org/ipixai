@@ -135,7 +135,7 @@ For detailed provider-specific documentation, see the [AI SDK Groq provider docs
 
 | Rule | Do | Don't |
 |------|-----|--------|
-| **Secrets** | `GROQ_API_KEY` server-only (Infisical, Edge, Mastra runtime) | `NEXT_PUBLIC_GROQ_*` or client bundle |
+| **Secrets** | `GROQ_API_KEY` server-only (local Dotenvx, provider secret store, Edge, or Mastra runtime) | `NEXT_PUBLIC_GROQ_*` or client bundle |
 | **Default provider** | `AI_PROVIDER=gemini` until GROQ-007 staged rollout | Cut over all paths at once |
 | **Model pick** | Read allowlist JSON — use production tiers below | Hardcode preview IDs (`llama-4-scout` for DNA launch) |
 | **Structured JSON** | `openai/gpt-oss-20b` or `120b` + strict JSON Schema + **Zod validate + retry/repair** | Trust "guaranteed" JSON without post-parse validation |

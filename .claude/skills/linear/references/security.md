@@ -10,8 +10,8 @@ Never expose Linear credentials, API keys, tokens, `.env` contents, or MCP confi
 
 For iPix, prefer the repo's configured secret flow:
 
-- Use `LINEAR_API_KEY` from `.env.local` or Infisical when available.
-- Use `infisical run -- ...` when the project is configured for Infisical secret injection.
+- Keep local `LINEAR_API_KEY` in the owning local/tooling env only when needed; deployment credentials stay provider-managed.
+- Use `dotenvx run --convention=nextjs -- ...` for local commands that require encrypted env values.
 - Use MCP server configuration that reads from environment variables.
 
 ## Unsafe commands
@@ -34,10 +34,10 @@ Use checks that do not reveal secret values:
 test -n "$LINEAR_API_KEY" && echo "LINEAR_API_KEY is set"
 ```
 
-If using Infisical:
+With Dotenvx:
 
 ```bash
-infisical run -- echo "Linear command executed with injected secrets"
+dotenvx run --convention=nextjs -- sh -c 'test -n "$LINEAR_API_KEY" && echo "Linear command executed with injected credentials"'
 ```
 
 ## MCP config pattern
