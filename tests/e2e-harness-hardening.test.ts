@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
@@ -12,7 +13,8 @@ import {
   establishAndProveVercelBypass,
   scopedBypassRoute,
 } from "../e2e/support/vercel-bypass";
-import { isAllowedE2EBaseUrl, previewBypassHeaders } from "../playwright.config";
+import agentPlaywrightConfig from "../playwright.agents.config";
+import playwrightConfig, { isAllowedE2EBaseUrl, previewBypassHeaders } from "../playwright.config";
 import { E2E_WEBSERVER_MARKER, plannerSeedRoutesEnabled } from "../src/lib/planner/seed-routes";
 
 
@@ -88,6 +90,17 @@ describe("Playwright E2E harness hardening", () => {
     });
   });
 
+  it("keeps Preview config collection credential-independent while auth setup fails closed", () => {
+    const config = readFileSync(path.resolve(process.cwd(), "playwright.config.ts"), "utf8");
+    const authSetup = readFileSync(path.resolve(process.cwd(), "e2e/auth.setup.ts"), "utf8");
+
+    expect(config).not.toContain(
+      "previewBypassHeaders(baseURL, process.env.VERCEL_AUTOMATION_BYPASS_SECRET);",
+    );
+    expect(authSetup).toContain("previewBypassHeaders(");
+    expect(authSetup).toContain("process.env.VERCEL_AUTOMATION_BYPASS_SECRET");
+  });
+
   it("never sets a context-wide extraHTTPHeaders for the bypass", () => {
     const config = readFileSync(path.resolve(process.cwd(), "playwright.config.ts"), "utf8");
     // Playwright's extraHTTPHeaders is global to the browser context: the bypass
@@ -97,7 +110,6 @@ describe("Playwright E2E harness hardening", () => {
     // requests all received the header. The bypass is scoped to the deployment
     // origin in e2e/support/vercel-bypass.ts instead.
     expect(config).not.toContain("extraHTTPHeaders:");
-    expect(config).toContain("previewBypassHeaders(baseURL, process.env.VERCEL_AUTOMATION_BYPASS_SECRET)");
 
     const authSetup = readFileSync(path.resolve(process.cwd(), "e2e/auth.setup.ts"), "utf8");
     expect(authSetup).toContain("previewBypassHeaders(");
@@ -315,6 +327,238 @@ describe("Playwright E2E harness hardening", () => {
     expect(reportStep).toBeDefined();
     expect(String(reportStep?.env?.TESTOMATIO_DISABLE_ARTIFACTS)).toBe("1");
     expect(steps.some((step) => step.uses?.startsWith("actions/upload-artifact@"))).toBe(false);
+  });
+
+  it("generates exactly the three official Playwright Test Agent definitions", () => {
+    const agentDir = path.resolve(process.cwd(), ".claude/agents");
+    expect(existsSync(agentDir)).toBe(true);
+
+    const agentFiles = readdirSync(agentDir)
+      .filter((file) => file.startsWith("playwright-test-") && file.endsWith(".md"))
+      .sort();
+    expect(agentFiles).toEqual([
+      "playwright-test-generator.md",
+      "playwright-test-healer.md",
+      "playwright-test-planner.md",
+    ]);
+
+    for (const [file, name] of [
+      ["playwright-test-planner.md", "playwright-test-planner"],
+      ["playwright-test-generator.md", "playwright-test-generator"],
+      ["playwright-test-healer.md", "playwright-test-healer"],
+    ] as const) {
+      const source = readFileSync(path.join(agentDir, file), "utf8");
+      expect(source).toContain(`name: ${name}`);
+    }
+  });
+
+  it("wires the Playwright Test Agents through the repo Playwright MCP server", () => {
+    const mcpPath = path.resolve(process.cwd(), ".mcp.json");
+    expect(existsSync(mcpPath)).toBe(true);
+    expect(JSON.parse(readFileSync(mcpPath, "utf8"))).toEqual({
+      mcpServers: {
+        "playwright-test": {
+          command: "npx",
+          args: ["playwright", "run-test-mcp-server", "--config=playwright.agents.config.ts"],
+        },
+      },
+    });
+  });
+
+  it("requires human approval before the healer can skip or fixme a failing test", () => {
+    const healerPath = path.resolve(process.cwd(), ".claude/agents/playwright-test-healer.md");
+    expect(existsSync(healerPath)).toBe(true);
+    const healer = readFileSync(healerPath, "utf8");
+
+    expect(healer).toContain("## iPix human-approval guardrails");
+    expect(healer).toContain("Never add `test.skip()`, `test.fixme()`, or an equivalent skip without explicit human approval");
+    expect(healer).not.toContain("mark this test as test.fixme()");
+  });
+
+  it("keeps Playwright Test Agents from autonomously modifying product code", () => {
+    for (const file of [
+      "playwright-test-planner.md",
+      "playwright-test-generator.md",
+      "playwright-test-healer.md",
+    ]) {
+      const filePath = path.resolve(process.cwd(), ".claude/agents", file);
+      expect(existsSync(filePath)).toBe(true);
+      expect(readFileSync(filePath, "utf8")).toContain("Never modify application/product code");
+    }
+  });
+
+  it("defaults Playwright agent execution to deterministic Chromium only", () => {
+    const agentProject = agentPlaywrightConfig.projects?.find((project) => project.name === "playwright-agent");
+    expect(agentProject).toBeDefined();
+    expect(agentProject?.testDir).toBe("./e2e/agents");
+    expect(agentProject?.dependencies).toEqual(["setup"]);
+    expect(agentProject?.use).toEqual(expect.objectContaining({ storageState: "playwright/.auth/user.json" }));
+
+    expect(agentPlaywrightConfig.projects?.map((project) => project.name)).toEqual([
+      "setup",
+      "chromium",
+      "playwright-agent",
+    ]);
+    const config = readFileSync(path.resolve(process.cwd(), "playwright.agents.config.ts"), "utf8");
+    expect(config).toContain('devices["Desktop Chrome"]');
+    expect(config).not.toContain('name: "chromium-ai-smoke"');
+
+    const healerPath = path.resolve(process.cwd(), ".claude/agents/playwright-test-healer.md");
+    expect(existsSync(healerPath)).toBe(true);
+    const healer = readFileSync(healerPath, "utf8");
+    expect(healer).toContain('e2e/agents/');
+    // Nested generated tests must stay on the dedicated agent project too:
+    // e2e/agents/checkout/nested.spec.ts is still "under e2e/agents/".
+    expect(healer).toContain('any requested test location under `e2e/agents/`');
+    expect(healer).toContain('projects: ["playwright-agent"]');
+    expect(healer).toContain('projects: ["chromium"]');
+    expect(healer).toContain("Never run `chromium-ai-smoke`");
+  });
+
+  it("keeps Preview bypass origin-scoped for the agent config through its setup dependency", () => {
+    const agentProject = agentPlaywrightConfig.projects?.find(
+      (project) => project.name === "playwright-agent",
+    );
+    const setupProject = agentPlaywrightConfig.projects?.find(
+      (project) => project.name === "setup",
+    );
+
+    expect(agentPlaywrightConfig.use?.extraHTTPHeaders).toBeUndefined();
+    expect(agentProject?.use?.extraHTTPHeaders).toBeUndefined();
+    expect(agentProject?.dependencies).toEqual(["setup"]);
+    expect(setupProject).toBeDefined();
+
+    const authSetup = readFileSync(
+      path.resolve(process.cwd(), "e2e/auth.setup.ts"),
+      "utf8",
+    );
+    expect(authSetup).toContain("previewBypassHeaders(");
+    expect(authSetup).toContain("establishAndProveVercelBypass({");
+    expect(authSetup).toContain("deploymentOrigin: new URL(baseURL).origin");
+  });
+
+  it("keeps the Playwright agent project out of the default Playwright config", () => {
+    expect(playwrightConfig.projects?.some((project) => project.name === "playwright-agent")).toBe(false);
+
+    const agentConfigPath = path.resolve(process.cwd(), "playwright.agents.config.ts");
+    expect(existsSync(agentConfigPath)).toBe(true);
+    const agentConfigSource = readFileSync(agentConfigPath, "utf8");
+    expect(agentConfigSource).toContain('name: "playwright-agent"');
+    expect(agentConfigSource).toContain('requiredProject("chromium")');
+
+    const mcp = JSON.parse(readFileSync(path.resolve(process.cwd(), ".mcp.json"), "utf8"));
+    expect(mcp.mcpServers["playwright-test"].args).toContain("--config=playwright.agents.config.ts");
+  });
+
+  it("describes the real authenticated seed state instead of assuming blank data", () => {
+    const planner = readFileSync(
+      path.resolve(process.cwd(), ".claude/agents/playwright-test-planner.md"),
+      "utf8",
+    );
+    expect(planner).not.toContain("always assume blank/fresh state");
+    expect(planner).toContain("existing authenticated account/data");
+    expect(planner).toContain("human-approved setup");
+  });
+
+  it("keeps generated Playwright tests inside the agent-only directory", () => {
+    const generator = readFileSync(
+      path.resolve(process.cwd(), ".claude/agents/playwright-test-generator.md"),
+      "utf8",
+    );
+    expect(generator).toContain("Write generated Playwright tests only under `e2e/agents/**`");
+    expect(generator).not.toContain("Write generated Playwright tests only under `e2e/**`");
+  });
+
+  it("fails before generation on unsupported Windows hosts", () => {
+    const initializer = readFileSync(
+      path.resolve(process.cwd(), "scripts/init-playwright-test-agents.mjs"),
+      "utf8",
+    );
+    expect(initializer).toContain('process.platform === "win32"');
+    expect(initializer).toContain("unsupported on Windows");
+  });
+
+  it("regenerates Playwright Test Agents deterministically with the installed CLI", () => {
+    const managed = [
+      ".claude/agents/playwright-test-planner.md",
+      ".claude/agents/playwright-test-generator.md",
+      ".claude/agents/playwright-test-healer.md",
+      ".mcp.json",
+      "e2e/agents/seed.spec.ts",
+      "specs/README.md",
+    ];
+    const before = new Map(
+      managed.map((file) => [
+        file,
+        readFileSync(path.resolve(process.cwd(), file)),
+      ]),
+    );
+
+    try {
+      const result = spawnSync(
+        process.execPath,
+        ["scripts/init-playwright-test-agents.mjs"],
+        {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          env: { ...process.env, CI: "1" },
+        },
+      );
+
+      expect(
+        result.status,
+        `initializer failed:\n${result.stderr || result.stdout}`,
+      ).toBe(0);
+      for (const file of managed) {
+        expect(readFileSync(path.resolve(process.cwd(), file))).toEqual(
+          before.get(file),
+        );
+      }
+    } finally {
+      for (const file of managed) {
+        writeFileSync(path.resolve(process.cwd(), file), before.get(file)!);
+      }
+    }
+  }, 30_000);
+
+  it("fails closed when generated Playwright agent output drifts", () => {
+    const initializer = readFileSync(
+      path.resolve(process.cwd(), "scripts/init-playwright-test-agents.mjs"),
+      "utf8",
+    );
+    expect(initializer).toContain("snapshotManagedFiles");
+    expect(initializer).toContain("restoreManagedFiles");
+    expect(initializer).toContain("deepStrictEqual");
+    expect(initializer).toContain("mkdir");
+  });
+
+  it("keeps the generated Playwright agent seed out of normal release E2E", () => {
+    const pkg = JSON.parse(readFileSync(path.resolve(process.cwd(), "package.json"), "utf8"));
+    expect(pkg.scripts.e2e).not.toContain("playwright-agent");
+    expect(pkg.scripts["e2e:agents:seed"]).toContain("--config=playwright.agents.config.ts");
+    expect(pkg.scripts["e2e:agents:seed"]).toContain("--project=playwright-agent");
+    expect(pkg.scripts["e2e:ai-smoke"]).not.toContain("playwright-agent");
+    expect(pkg.scripts["e2e:approval"]).not.toContain("playwright-agent");
+
+    for (const name of ["chromium", "mobile-chromium"]) {
+      const project = playwrightConfig.projects?.find((candidate) => candidate.name === name);
+      const ignores = Array.isArray(project?.testIgnore) ? project.testIgnore : [project?.testIgnore].filter(Boolean);
+      expect(
+        ignores.some((pattern) => pattern instanceof RegExp && pattern.test("/repo/e2e/agents/seed.spec.ts")),
+      ).toBe(true);
+      expect(
+        ignores.some((pattern) => pattern instanceof RegExp && pattern.test("/repo/e2e/agents/helper.ts")),
+      ).toBe(true);
+      expect(
+        ignores.some((pattern) => pattern instanceof RegExp && pattern.test("/repo/e2e/dashboard.spec.ts")),
+      ).toBe(false);
+    }
+
+    const seedPath = path.resolve(process.cwd(), "e2e/agents/seed.spec.ts");
+    expect(existsSync(seedPath)).toBe(true);
+    const seed = readFileSync(seedPath, "utf8");
+    expect(seed).toContain('await page.goto("/app")');
+    expect(seed).toContain("toHaveURL");
   });
 
   it("keeps live-AI planner smoke health-only instead of requiring composeShootPlan tool selection", () => {
