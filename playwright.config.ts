@@ -1,19 +1,21 @@
-import path from "node:path";
-import process from "node:process";
 import { defineConfig, devices } from "@playwright/test";
 import { config as loadDotenvx } from "@dotenvx/dotenvx";
 
 // E2E credentials and overrides live in .env.test (gitignored, see .env.example).
 // CI injects equivalent values as job env vars, so only CI suppresses missing-file errors.
 // Local runs surface Dotenvx's MISSING_ENV_FILE error immediately for better setup diagnostics.
-const missingEnvIgnore = process.env.CI ? ["MISSING_ENV_FILE"] : undefined;
-loadDotenvx({ path: path.resolve(process.cwd(), ".env.test"), quiet: true, ignore: missingEnvIgnore });
+const missingEnvIgnore =
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Codacy cannot resolve Node's built-in process type in this config; tsc and Playwright do.
+  process.env.CI ? ["MISSING_ENV_FILE"] : undefined;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-call -- @dotenvx/dotenvx@2.30.0 publishes config() types; Codacy does not resolve them in this config.
+loadDotenvx({ path: ".env.test", quiet: true, ignore: missingEnvIgnore });
 // NEXT_PUBLIC_SUPABASE_URL / PUBLISHABLE_KEY for direct read-only REST calls
 // from spec files (e.g. tenant-isolation.spec.ts's org-identity check) — the
 // webServer's spawned Next process reads the Next.js convention itself, but the Playwright
 // test runner process does not; load the canonical local runtime file here too.
 // CI supplies these as real job env vars; local runs should visibly report a missing canonical file.
-loadDotenvx({ path: path.resolve(process.cwd(), ".env.local"), quiet: true, ignore: missingEnvIgnore });
+// eslint-disable-next-line @typescript-eslint/no-unsafe-call -- @dotenvx/dotenvx@2.30.0 publishes config() types; Codacy does not resolve them in this config.
+loadDotenvx({ path: ".env.local", quiet: true, ignore: missingEnvIgnore });
 
 const hasExplicitBaseURL = Boolean(process.env.E2E_BASE_URL);
 const baseURL = process.env.E2E_BASE_URL || "http://localhost:3015";
