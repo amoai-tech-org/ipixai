@@ -298,6 +298,8 @@ This keeps Claude's context lean during the audit itself.
 ```bash
 if [ ! -f graphify-out/graph.json ]; then
   PATH="$HOME/.local/bin:$PATH" graphify extract . --code-only
+else
+  PATH="$HOME/.local/bin:$PATH" graphify update .
 fi
 
 PATH="$HOME/.local/bin:$PATH" graphify query "what are the largest modules and their dependencies"
