@@ -8,10 +8,10 @@
   "scripts": {
     "dev": "echo 'DEV-STAB-001: run npm run dev:ui and npm run dev:agent separately until the combined watcher storm is fixed' && exit 1",
     "dev:agent": "dotenvx run --convention=nextjs -- node scripts/dev-guard.mjs --port 4111 -- mastra dev",
-    "dev:ui": "dotenvx run --convention=nextjs -- node scripts/dev-guard.mjs --port 3000 -- next dev --turbopack",
+    "dev:ui": "node scripts/dev-guard.mjs --port 3000 -- next dev --turbopack",
     "dev:debug": "LOG_LEVEL=debug npm run dev:ui",
-    "build": "dotenvx run --convention=nextjs -- node scripts/dev-guard.mjs --port 3000 --port 4111 -- next build",
-    "start": "dotenvx run --convention=nextjs -- next start",
+    "build": "node scripts/dev-guard.mjs --port 3000 --port 4111 -- next build",
+    "start": "next start",
     "typecheck": "tsc --noEmit",
     "secrets:check": "node scripts/check-local-secrets.mjs",
     "secrets:protect": "dotenvx protect",
@@ -31,8 +31,8 @@
     "e2e:report": "PLAYWRIGHT_BROWSERS_PATH=0 playwright show-report",
     "e2e:production": "E2E_PRODUCTION_SMOKE=1 PLAYWRIGHT_BROWSERS_PATH=0 playwright test --config=playwright.production.config.ts",
     "e2e:approval": "PLAYWRIGHT_BROWSERS_PATH=0 node scripts/run-approval-001-e2e.mjs",
-    "dev:e2e": "dotenvx run --convention=nextjs -- node scripts/dev-guard.mjs --port 3015 -- next dev --turbopack -p 3015",
-    "start:e2e": "dotenvx run --convention=nextjs -- node scripts/dev-guard.mjs --port 3015 -- next start -p 3015",
+    "dev:e2e": "node scripts/dev-guard.mjs --port 3015 -- next dev --turbopack -p 3015",
+    "start:e2e": "node scripts/dev-guard.mjs --port 3015 -- next start -p 3015",
     "e2e:install": "PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium",
     "e2e:agents:init": "node scripts/init-playwright-test-agents.mjs",
     "e2e:agents:seed": "PLAYWRIGHT_BROWSERS_PATH=0 playwright test --config=playwright.agents.config.ts --project=playwright-agent",
@@ -79,6 +79,7 @@
   },
   "devDependencies": {
     "@dotenvx/dotenvx": "2.30.0",
+    "@dotenvx/next-env": "2.2.3",
     "@playwright/cli": "0.1.21",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
@@ -104,6 +105,7 @@
     "@ag-ui/proto": "0.0.59",
     "qs": "6.16.0",
     "shell-quote": "1.9.0",
-    "js-yaml": "3.15.2"
+    "js-yaml": "3.15.2",
+    "@next/env": "npm:@dotenvx/next-env"
   }
 }
