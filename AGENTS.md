@@ -102,13 +102,15 @@ Combined `npm run dev` is blocked by **DEV-STAB-001** because of the watcher/for
 
 Do not run `npm run build` while `:3000` or `:4111` is listening (`scripts/dev-guard.mjs`). Restart a dev server after adding dependencies.
 
-Graphify before spanning-file search:
+Graphify before spanning-file search. Build the local graph once when absent, update it after source changes, then query it:
 
 ```bash
+PATH="$HOME/.local/bin:$PATH" graphify .
+PATH="$HOME/.local/bin:$PATH" graphify update .
 PATH="$HOME/.local/bin:$PATH" graphify query "<question>"
 ```
 
-Graph: `graphify-out/graph.json`.
+Graph: `graphify-out/graph.json` (generated local state; do not commit it).
 
 ## Source of truth — higher wins
 
