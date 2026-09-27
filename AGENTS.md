@@ -207,7 +207,7 @@ Do not autonomously publish, pay, delete, or commit sensitive business state.
 
 - TypeScript (`.ts` / `.tsx`), `strict: true`.
 - App in `src/`; Mastra in `src/mastra/`.
-- Smallest correct change; reuse existing helpers such as `ponytail`.
+- Smallest correct change; follow the `ponytail` skill (`.agents/skills/ponytail/SKILL.md`) — reuse what already exists here before writing anything new.
 - One concern per commit/PR; do not mix unrelated cleanup.
 - Full Linear names: `IPI-NNN · TASK-ID — Full title`, where `TASK-ID` is the real spec identifier such as `BRAND-001`, `DASH-MAIN-002`, or `MIGRATE-TEMPLATE`.
 
