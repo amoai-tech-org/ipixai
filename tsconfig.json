@@ -37,6 +37,7 @@
     "next.config.ts",
     "vitest.config.ts",
     "playwright.config.ts",
+    "playwright.agents.config.ts",
     "playwright.approval.config.ts",
     "playwright.production.config.ts",
     "channels.mts",

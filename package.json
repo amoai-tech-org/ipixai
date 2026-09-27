@@ -34,6 +34,8 @@
     "dev:e2e": "dotenvx run --convention=nextjs -- node scripts/dev-guard.mjs --port 3015 -- next dev --turbopack -p 3015",
     "start:e2e": "dotenvx run --convention=nextjs -- node scripts/dev-guard.mjs --port 3015 -- next start -p 3015",
     "e2e:install": "PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium",
+    "e2e:agents:init": "node scripts/init-playwright-test-agents.mjs",
+    "e2e:agents:seed": "PLAYWRIGHT_BROWSERS_PATH=0 playwright test --config=playwright.agents.config.ts --project=playwright-agent",
     "docs:check": "node scripts/check-doc-links.mjs",
     "test:coverage": "vitest run --coverage",
     "skills:registry:check": "node scripts/validate-skill-registry.mjs",
