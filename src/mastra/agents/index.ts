@@ -36,7 +36,11 @@ type AgUiContextEntry = { description?: string; value?: string };
 
 function formatActiveWorkspaceContext(requestContext?: RequestContext): string {
   const agUi = requestContext?.getRaw("ag-ui") as { context?: AgUiContextEntry[] } | undefined;
-  const blocks = (agUi?.context ?? [])
+  // IPI-1363 · PLANNER-CONTEXT-002: `?? []` is a nullish check, not a type
+  // check, so a truthy wrong-typed `context` (string/object/number) reached
+  // `.map()` and threw `TypeError: ....map is not a function`. A malformed
+  // container must fail closed by omission, exactly like malformed JSON below.
+  const blocks = (Array.isArray(agUi?.context) ? agUi.context : [])
     .map((entry) => {
       if (!entry?.value) return null;
       let parsed: unknown;
