@@ -169,7 +169,9 @@ Use `graphify-out/wiki/index.md` for broad navigation when present. Read `graphi
 
 ## Secrets / Dotenvx
 
-Follow `AGENTS.md` § Secrets / Dotenvx as the repository source of truth. Do not duplicate or weaken it here.
+Follow `AGENTS.md` § Secrets / Dotenvx as the repository source of truth. Keep this section limited to Claude-specific launch and escalation rules; do not restate the full repository-wide policy here.
+
+When Claude needs credentials, launch it with `npm run agent:claude`. If a required credential is missing from `.env.agent`, stop and ask the user to add the named key to `.env.agent` or its provider-managed owner; never request or paste the secret value into chat.
 
 ## Response style
 

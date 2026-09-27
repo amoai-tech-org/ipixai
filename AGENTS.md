@@ -290,13 +290,14 @@ Critical API names, versions, auth behavior, RLS assumptions, env keys, and URLs
 ## Secrets / Dotenvx
 
 - Dotenvx is the canonical local secret-injection path. The repo pins `@dotenvx/dotenvx`; do not depend on a developer's global version.
-- `npm run dev:ui`, `npm run dev:agent`, `npm run dev:e2e`, and `npm run channel` inject the Next.js env convention through Dotenvx.
+- Use the repository scripts as the Dotenvx integration boundary; do not hand-roll an alternate loader. Next.js and non-Next runtimes may use different repository-managed Dotenvx integrations, so verify `package.json` and the lockfile before changing them.
 - `.env.local` is the canonical local app/runtime file. Plain `.env` is retired; if a tool recreates it, migrate required names to their owning file and remove it. `.env.legacy-retired` is encrypted rollback-only state and normal app/test scripts do not load it. `.env.test` owns QA/E2E values. `.env.agent` is a separate least-privilege file for coding-agent credentials and starts empty by default.
 - Production/deployment secrets remain provider-managed (for example Vercel, GitHub Actions, Supabase, or Cloudflare). Local Dotenvx files are not production secret truth.
 - Coding agents must not be launched with the full `.env`/`.env.local`. Use `npm run agent:claude` or `npm run agent:codex`, which load only `.env.agent` and redact exact secret matches from stdout/stderr.
 - `--redact` is output protection, not an authorization boundary: the child process can read values loaded into it. Keep `.env.agent` minimal; service-role keys, database credentials, deployment tokens, and production credentials belong to their owning app/test/provider secret paths instead of `.env.agent`.
 - Real `.env*` files and `.env.keys` stay gitignored. Private keys must be owner-only (`chmod 600`) and must never appear in chat, logs, PRs, Linear, or model context.
 - Never print, echo, `cat`, `dotenvx get`, or otherwise reveal secret values. Verify only variable names + presence.
+- Never use `dotenvx run --debug`, `dotenvx decrypt --stdout`, or any command that produces unmasked key/private-key output or otherwise prints secret values in agent or CI logs. Prefer names/presence checks and repository wrappers.
 - The legacy Infisical local binding is retired after names-only parity verification. Do not recreate it or use `infisical run` as the local secret path; local injection stays on Dotenvx and deployment secrets stay provider-managed.
 
 ### Test credentials (.env.test)
