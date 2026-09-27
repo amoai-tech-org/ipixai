@@ -80,6 +80,25 @@ describe("skill reference integrity", () => {
     expect(missing).toEqual([]);
   });
 
+  it("keeps Ponytail load-bearing rules aligned across the canonical skill and Cursor adapter", () => {
+    const canonical = readFileSync(resolve(agentsRoot, "ponytail/SKILL.md"), "utf8");
+    const cursor = readFileSync(resolve(repoRoot, ".cursor/rules/ponytail.mdc"), "utf8");
+    const invariants = [
+      "Does it already exist in this codebase?",
+      "input validation at trust boundaries",
+      "error handling that prevents data loss",
+      "security",
+      "accessibility",
+      "Lazy code without its check is unfinished",
+      "AGENTS.md and the live Linear task still win",
+    ];
+
+    for (const invariant of invariants) {
+      expect(canonical, `canonical Ponytail missing: ${invariant}`).toContain(invariant);
+      expect(cursor, `Cursor Ponytail missing: ${invariant}`).toContain(invariant);
+    }
+  });
+
   it("keeps explicit skill paths and deprecated aliases out of AGENTS, Cursor rules, and scripts", () => {
     const sourceFiles = [
       resolve(repoRoot, "AGENTS.md"),
