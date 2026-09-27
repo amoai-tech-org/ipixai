@@ -88,13 +88,17 @@ DO $$
 DECLARE
   col_type text;
   col_nullable text;
-  idx_ok boolean;
+  col_default text;
+  idx_valid boolean;
+  idx_table text;
+  idx_def text;
   defs_rls boolean;
   snap_rls boolean;
   public_shadow int;
   postgrest_grant int;
 BEGIN
-  SELECT data_type, is_nullable INTO col_type, col_nullable
+  SELECT data_type, is_nullable, column_default
+    INTO col_type, col_nullable, col_default
   FROM information_schema.columns
   WHERE table_schema = 'mastra'
     AND table_name = 'mastra_workflow_definitions'
@@ -108,15 +112,39 @@ BEGIN
   IF col_nullable <> 'YES' THEN
     RAISE EXCEPTION 'IPI-1332 postflight: schedule must stay nullable, found is_nullable=%', col_nullable;
   END IF;
+  -- ADD COLUMN IF NOT EXISTS matches on NAME only and does NOT reconcile a
+  -- pre-existing column. The target DDL specifies no default, so a column that
+  -- already existed with one would otherwise pass and silently feed later
+  -- inserts a schedule value the schema does not define. Fail instead.
+  IF col_default IS NOT NULL THEN
+    RAISE EXCEPTION 'IPI-1332 postflight: schedule must have no default, found %', col_default;
+  END IF;
 
-  SELECT EXISTS (
-    SELECT 1 FROM pg_indexes
-    WHERE schemaname = 'mastra'
-      AND tablename = 'mastra_workflow_snapshot'
-      AND indexname = 'mastra_mastra_workflow_snapshot_threadid_idx'
-  ) INTO idx_ok;
-  IF NOT idx_ok THEN
+  -- CREATE INDEX IF NOT EXISTS also matches on NAME only, so verify the object
+  -- that actually exists rather than trusting the name: right table, valid, and
+  -- the required thread-id expression. A stale, invalid or differently defined
+  -- same-named index must fail loudly, not report success.
+  SELECT i.indisvalid, tbl.relname, pg_get_indexdef(i.indexrelid)
+    INTO idx_valid, idx_table, idx_def
+  FROM pg_index i
+  JOIN pg_class idx ON idx.oid = i.indexrelid
+  JOIN pg_class tbl ON tbl.oid = i.indrelid
+  JOIN pg_namespace nsp ON nsp.oid = idx.relnamespace
+  WHERE nsp.nspname = 'mastra'
+    AND idx.relname = 'mastra_mastra_workflow_snapshot_threadid_idx';
+  IF idx_def IS NULL THEN
     RAISE EXCEPTION 'IPI-1332 postflight: mastra_mastra_workflow_snapshot_threadid_idx missing';
+  END IF;
+  IF idx_table <> 'mastra_workflow_snapshot' THEN
+    RAISE EXCEPTION 'IPI-1332 postflight: thread-id index is on %, expected mastra_workflow_snapshot', idx_table;
+  END IF;
+  IF NOT idx_valid THEN
+    RAISE EXCEPTION 'IPI-1332 postflight: thread-id index exists but is not valid';
+  END IF;
+  IF position('__streamState' IN idx_def) = 0
+     OR position('{context,input,messageListState,memoryInfo,threadId}' IN idx_def) = 0
+  THEN
+    RAISE EXCEPTION 'IPI-1332 postflight: thread-id index definition does not match the target expression: %', idx_def;
   END IF;
 
   SELECT c.relrowsecurity INTO defs_rls
