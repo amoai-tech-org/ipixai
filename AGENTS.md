@@ -295,6 +295,7 @@ Critical API names, versions, auth behavior, RLS assumptions, env keys, and URLs
 - `--redact` is output protection, not an authorization boundary: the child process can read values loaded into it. Keep `.env.agent` minimal; service-role keys, database credentials, deployment tokens, and production credentials belong to their owning app/test/provider secret paths instead of `.env.agent`.
 - Real `.env*` files and `.env.keys` stay gitignored. Private keys must be owner-only (`chmod 600`) and must never appear in chat, logs, PRs, Linear, or model context.
 - Never print, echo, `cat`, `dotenvx get`, or otherwise reveal secret values. Verify only variable names + presence.
+- Never use `dotenvx run --debug`, `dotenvx decrypt --stdout`, unmasked key/private-key output, or any command that can print secret values in agent or CI logs. Prefer names/presence checks and repository wrappers.
 - The legacy Infisical local binding is retired after names-only parity verification. Do not recreate it or use `infisical run` as the local secret path; local injection stays on Dotenvx and deployment secrets stay provider-managed.
 
 ### Test credentials (.env.test)
