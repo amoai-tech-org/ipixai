@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { BaseEvent } from "@ag-ui/client";
+import { EventType, type BaseEvent } from "@ag-ui/client";
 
 export type PlannerRunControlMessage =
   | { kind: "probe"; requestId: string }
@@ -157,6 +157,7 @@ export class PlannerRunControl {
     const connectRequests = new Set<string>();
     const replayBuffer: BaseEvent[] = [];
     let remoteListener = false;
+    let terminalPublished = false;
     let closed = false;
     let sendQueue = Promise.resolve();
     const enqueue = (message: PlannerRunControlMessage): Promise<void> => {
@@ -171,47 +172,24 @@ export class PlannerRunControl {
       const respond = async () => {
         if (closed) return;
         if (message.kind === "probe") {
-          await enqueue({
-            kind: "probe_ack",
-            requestId: message.requestId,
-            runId,
-            ownerInstanceId: this.instanceId,
-          });
+          await enqueue({ kind: "probe_ack", requestId: message.requestId, runId, ownerInstanceId: this.instanceId });
           return;
         }
         if (message.kind === "connect") {
           remoteListener = true;
           const firstDelivery = !connectRequests.has(message.requestId);
           connectRequests.add(message.requestId);
-
-          // On the first delivery, queue replay events specifically for the
-          // controller that requested them before sending its ACK. Other
-          // controllers on the same thread ignore the tagged replay while
-          // untagged live events continue to fan out to all listeners.
           let response = Promise.resolve();
           if (firstDelivery) {
             for (const event of replayBuffer) {
-              response = enqueue({
-                kind: "event",
-                runId,
-                event,
-                replayFor: message.requestId,
-              });
+              response = enqueue({ kind: "event", runId, event, replayFor: message.requestId });
             }
           }
-          response = enqueue({
-            kind: "connect_ack",
-            requestId: message.requestId,
-            runId,
-            ownerInstanceId: this.instanceId,
-          });
+          response = enqueue({ kind: "connect_ack", requestId: message.requestId, runId, ownerInstanceId: this.instanceId });
           await response;
           return;
         }
         if (message.kind === "stop") {
-          // Multiple starts can overlap briefly on one thread. Only the owner
-          // of the requested run may acknowledge the Stop; otherwise a newer
-          // run could race the real owner and incorrectly return stopped:false.
           if (message.runId !== runId) return;
           let response = stopRequests.get(message.requestId);
           if (!response) {
@@ -236,19 +214,26 @@ export class PlannerRunControl {
       });
     });
 
+    const publishEvent = async (event: BaseEvent) => {
+      if (closed) return;
+      if (event.type === EventType.RUN_FINISHED || event.type === EventType.RUN_ERROR) {
+        terminalPublished = true;
+      }
+      replayBuffer.push(event);
+      if (remoteListener) await enqueue({ kind: "event", runId, event });
+    };
+
     return {
-      publish: async (event) => {
-        if (closed) return;
-        replayBuffer.push(event);
-        if (remoteListener) {
-          await enqueue({ kind: "event", runId, event });
-        }
-      },
+      publish: publishEvent,
       close: async (terminal) => {
         if (closed) return;
-        if (terminal && remoteListener) {
-          replayBuffer.push(terminal);
-          await enqueue({ kind: "event", runId, event: terminal });
+        if (terminal) {
+          await publishEvent(terminal);
+        } else if (remoteListener && !terminalPublished) {
+          await publishEvent({
+            type: EventType.RUN_ERROR,
+            message: "planner_run_owner_closed",
+          } as BaseEvent);
         }
         closed = true;
         stopRequests.clear();
@@ -283,11 +268,8 @@ export class PlannerRunControl {
 
   async probe(threadId: string): Promise<ProbeAck | null> {
     const requestId = randomUUID();
-    return this.request(
-      threadId,
-      { kind: "probe", requestId },
-      (message): message is ProbeAck =>
-        message.kind === "probe_ack" && message.requestId === requestId,
+    return this.request(threadId, { kind: "probe", requestId }, (message): message is ProbeAck =>
+      message.kind === "probe_ack" && message.requestId === requestId,
     );
   }
 
@@ -297,13 +279,8 @@ export class PlannerRunControl {
 
   async stop(threadId: string, runId: string): Promise<StopAck | null> {
     const requestId = randomUUID();
-    return this.request(
-      threadId,
-      { kind: "stop", requestId, runId },
-      (message): message is StopAck =>
-        message.kind === "stop_ack" &&
-        message.requestId === requestId &&
-        message.runId === runId,
+    return this.request(threadId, { kind: "stop", requestId, runId }, (message): message is StopAck =>
+      message.kind === "stop_ack" && message.requestId === requestId && message.runId === runId,
     );
   }
 
