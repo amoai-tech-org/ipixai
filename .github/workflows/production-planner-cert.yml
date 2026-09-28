@@ -189,9 +189,10 @@ jobs:
           # step passed without verifying anything.
           #
           # `vercel logs` defaults to 100 result lines, which truncates the
-          # certification window (measured: exactly 100 lines returned). Raise the
-          # limit so the whole window is scanned.
-          vercel logs "$DEPLOYMENT_URL" --json --limit 1000 --token="$VERCEL_TOKEN" > "$PROD_LOG_FILE"
+          # certification window (measured: exactly 100 lines returned for a
+          # single journey). Raise the limit well past the journey's volume so the
+          # window cannot rotate out from under the check.
+          vercel logs "$DEPLOYMENT_URL" --json --limit 5000 --token="$VERCEL_TOKEN" > "$PROD_LOG_FILE"
           node scripts/check-planner-production-logs.mjs
 
       - name: Certification summary

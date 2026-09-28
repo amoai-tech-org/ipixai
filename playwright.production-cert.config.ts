@@ -66,8 +66,9 @@ export default defineConfig({
   retries: 0,
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- see above.
   reporter: process.env.CI ? [["github"], ["list"]] : "list",
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the spread of `devices[...]` is typed `any` when Codacy cannot resolve Playwright's device descriptors; tsc and Playwright do.
   use: {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Codacy does not resolve Playwright's device descriptors here.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- see above.
     ...devices["Desktop Chrome"],
     baseURL: PRODUCTION_ORIGIN,
     trace: "off",
