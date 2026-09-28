@@ -38,18 +38,21 @@ loadDotenvx({ path: ".env.test", quiet: true, ignore: missingEnvIgnore });
 // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- see above.
 loadDotenvx({ path: ".env.local", quiet: true, ignore: missingEnvIgnore });
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Codacy cannot resolve Node's built-in process type in this config; tsc and Playwright do.
 if (process.env.E2E_PRODUCTION_CERT !== "1") {
   throw new Error(
     "Production Planner certification is disabled. Run `npm run e2e:production-cert` to opt in explicitly.",
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- see above.
 if (!process.env.E2E_TEST_EMAIL || !process.env.E2E_TEST_PASSWORD) {
   throw new Error(
     "Production certification requires E2E_TEST_EMAIL / E2E_TEST_PASSWORD from the local .env.test file.",
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-call -- Codacy does not resolve Playwright's defineConfig types in this config; tsc and Playwright do.
 export default defineConfig({
   testDir: "./e2e",
   // Named specs only. `planner-stop-journey` owns the whole acceptance
@@ -61,8 +64,10 @@ export default defineConfig({
   // Each attempt makes real, paid model calls; a retry would also hide the
   // exact timing behaviour this certification exists to prove.
   retries: 0,
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- see above.
   reporter: process.env.CI ? [["github"], ["list"]] : "list",
   use: {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Codacy does not resolve Playwright's device descriptors here.
     ...devices["Desktop Chrome"],
     baseURL: PRODUCTION_ORIGIN,
     trace: "off",

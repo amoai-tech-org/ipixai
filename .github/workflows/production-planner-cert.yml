@@ -43,6 +43,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Validate the request
+        id: request
         shell: bash
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
@@ -57,11 +58,21 @@ jobs:
             echo "::error::type the exact confirmation phrase 'certify-production' in the confirm input" >&2
             exit 1
           fi
+          # Vercel reports `githubCommitSha` in lowercase. Normalize once here and
+          # use this value for the checkout and every comparison, so a correct SHA
+          # typed in uppercase is not rejected as a different commit.
+          echo "expected_sha=$(printf '%s' "$EXPECTED_SHA" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout current main
+      # Certify the deployed artifact with the code that shipped in it, not with
+      # whatever `main` has since become: checking out `main` would run newer
+      # specs against an older deployment, so a green run would not prove the
+      # requested SHA passes. Safe to use this input as a ref because the step
+      # above validated it as a 40-character SHA, and only users with write
+      # access can dispatch this workflow.
+      - name: Checkout the certified SHA
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          ref: main
+          ref: ${{ steps.request.outputs.expected_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -70,6 +81,22 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+
+      # CKV_GHA_7: the SHA is human-supplied. Prove it is a commit this repository
+      # actually released (an ancestor of main) rather than an arbitrary object,
+      # which is the strongest check available without trusting the input.
+      - name: Assert the SHA is a released commit on main
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ steps.request.outputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$EXPECTED_SHA" origin/main; then
+            echo "::error::${EXPECTED_SHA} is not an ancestor of origin/main, so it is not a released iPix commit" >&2
+            exit 1
+          fi
+          echo "OK: ${EXPECTED_SHA} is in main's history."
 
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@59.23.1
@@ -82,7 +109,7 @@ jobs:
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ steps.request.outputs.expected_sha }}
         run: |
           set -euo pipefail
           vercel ls ipixai --prod --json --token="$VERCEL_TOKEN" > /tmp/prod.json
@@ -138,29 +165,19 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           DEPLOYMENT_URL: ${{ steps.prod.outputs.deployment_url }}
+          PROD_LOG_FILE: /tmp/prod-logs.jsonl
         run: |
           set -euo pipefail
-          vercel logs "$DEPLOYMENT_URL" --json --token="$VERCEL_TOKEN" > /tmp/prod-logs.jsonl || true
-          node -e '
-            const fs = require("fs");
-            const lines = fs.readFileSync("/tmp/prod-logs.jsonl", "utf8").split("\n").filter(Boolean);
-            const copilotkit = [];
-            const bad = [];
-            for (const line of lines) {
-              let entry;
-              try { entry = JSON.parse(line); } catch { continue; }
-              const text = JSON.stringify(entry);
-              const status = entry.statusCode ?? (entry.proxy && entry.proxy.statusCode);
-              const path = (entry.proxy && entry.proxy.path) || entry.path || "";
-              if (status >= 500) bad.push(`${status} ${path}`);
-              if (/\/api\/copilotkit/.test(text) && status >= 500) copilotkit.push(`${status} ${path}`);
-            }
-            console.log(`scanned ${lines.length} log line(s); /api/copilotkit 5xx: ${copilotkit.length}; any 5xx: ${bad.length}`);
-            if (copilotkit.length > 0) {
-              console.error(copilotkit.join("\n"));
-              process.exit(1);
-            }
-          '
+          # Fail closed, and do NOT discard the query result. The previous version
+          # piped this through `|| true`, so a failed or unauthorized log request
+          # produced an empty file, the parser found zero errors in it, and the
+          # step passed without verifying anything.
+          #
+          # `vercel logs` defaults to 100 result lines, which truncates the
+          # certification window (measured: exactly 100 lines returned). Raise the
+          # limit so the whole window is scanned.
+          vercel logs "$DEPLOYMENT_URL" --json --limit 1000 --token="$VERCEL_TOKEN" > "$PROD_LOG_FILE"
+          node scripts/check-planner-production-logs.mjs
 
       - name: Certification summary
         if: always()
@@ -170,7 +187,7 @@ jobs:
             echo ""
             echo "| Field | Value |"
             echo "| -- | -- |"
-            echo "| Requested SHA | \`${{ inputs.expected_sha }}\` |"
+            echo "| Requested SHA | \`${{ steps.request.outputs.expected_sha }}\` |"
             echo "| Deployment | \`${{ steps.prod.outputs.deployment_url }}\` |"
             echo "| Deployed SHA | \`${{ steps.prod.outputs.deployment_sha }}\` |"
             echo "| Run | ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} |"
