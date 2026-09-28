@@ -286,12 +286,29 @@ describe("Playwright E2E harness hardening", () => {
       .filter((entry) => entry.endsWith(".spec.ts"));
     expect(specFiles.length).toBeGreaterThan(0);
 
-    const matcher = new RegExp(`^(?:${declaredPattern})$`);
-    const unmatched = specFiles.filter((file) => !matcher.test(file));
+    // Exercise the workflow's real extraction (`grep -oE`) instead of
+    // reimplementing the match in JS. That is both a stronger test — it proves the
+    // shipped mechanism, not a JS lookalike — and it avoids a non-literal
+    // `new RegExp`, which is a legitimate security-linter finding. The pattern is
+    // passed through the environment, never interpolated into the command.
+    const extraction = spawnSync(
+      "bash",
+      ["-c", 'grep -oE "$SPEC_PATH_PATTERN" <<< "$SPEC_LIST" | sort -u'],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          SPEC_PATH_PATTERN: declaredPattern,
+          SPEC_LIST: specFiles.join("\n"),
+        },
+      },
+    );
+    expect(extraction.status, extraction.stderr).toBe(0);
+    const extracted = extraction.stdout.split("\n").filter(Boolean);
     expect(
-      unmatched,
-      "the spec path pattern must match every real spec path, including sub-directories and mixed case",
-    ).toEqual([]);
+      extracted,
+      "the spec path pattern must extract every real spec path, including sub-directories and mixed case",
+    ).toEqual([...specFiles].sort());
 
     // The same pattern must appear in the run step, or the two could drift.
     const journey = (job.steps ?? []).find((step) =>
