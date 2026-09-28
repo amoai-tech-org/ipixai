@@ -92,7 +92,11 @@ async function accessToken(apiUrl: string, publishableKey: string, email: string
 async function seed(dbUrl: string) {
   const client = new pg.Client({ connectionString: dbUrl });
   await client.connect();
+  const values = [ORG_A, ORG_B, USER_A, USER_B];
   try {
+    // Keep parameterized fixture writes as separate pg queries. node-postgres
+    // uses the extended protocol when parameters are present and PostgreSQL
+    // rejects multiple commands in one prepared statement.
     await client.query(
       `
       insert into public.organizations (id, name, slug, type, owner_id)
@@ -100,15 +104,19 @@ async function seed(dbUrl: string) {
         ($1, 'IPI 1117 Org A', 'ipi-1117-org-a', 'brand', $3),
         ($2, 'IPI 1117 Org B', 'ipi-1117-org-b', 'brand', $4)
       on conflict (id) do update
-        set name = excluded.name, owner_id = excluded.owner_id, updated_at = now();
-
+        set name = excluded.name, owner_id = excluded.owner_id, updated_at = now()
+      `,
+      values,
+    );
+    await client.query(
+      `
       insert into public.org_members (org_id, user_id, role)
       values
         ($1, $3, 'owner'),
         ($2, $4, 'owner')
-      on conflict (org_id, user_id) do update set role = excluded.role;
+      on conflict (org_id, user_id) do update set role = excluded.role
       `,
-      [ORG_A, ORG_B, USER_A, USER_B],
+      values,
     );
   } finally {
     await client.end();
