@@ -12,7 +12,7 @@ Current interactive control primitive: https://mastra.ai/docs/harness/agent-cont
 
 Mastra uses **harness** for the broader capabilities around long-running agent work: durability, background tasks, goals, schedules, signals, and interactive control. `AgentController` is the current API for an interactive experience around an agent, including sessions, modes, state, approvals, subagents, model switching, persisted threads, and UI events.
 
-Installed `@mastra/core 1.63.2` exposes `AgentController` under `@mastra/core/agent-controller`; the older `harnesses` registration/accessors are deprecated aliases in installed types. Verify exact APIs in installed source/types before implementation.
+Installed `@mastra/core 1.71.0` exposes the canonical `AgentController` entrypoint under `@mastra/core/agent-controller`. The `@mastra/core/harness` entrypoint is retained for backwards compatibility, while `Harness`, `MastraConfig.harnesses`, and `get/listHarness*` aliases are deprecated in installed types. New iPix work should use `AgentController`, `agentControllers`, and the `get/listAgentController*` APIs after verifying the exact installed signature.
 
 ## iPix use
 

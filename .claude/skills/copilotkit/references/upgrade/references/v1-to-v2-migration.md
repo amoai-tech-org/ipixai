@@ -498,7 +498,7 @@ export const POST = copilotKitEndpoint(runtime, serviceAdapter);
 ### v2: AG-UI Agent Pattern
 
 ```ts
-import { CopilotRuntime, createCopilotEndpoint } from "@copilotkit/runtime";
+import { CopilotRuntime, createCopilotHonoHandler } from "@copilotkit/runtime/v2";
 import { BuiltInAgent } from "@copilotkit/agent";
 import { LangGraphAgent } from "@ag-ui/langgraph";
 
@@ -522,7 +522,7 @@ const runtime = new CopilotRuntime({
 });
 
 // Hono-based endpoint (works with Next.js, Express, standalone)
-const app = createCopilotEndpoint({
+const app = createCopilotHonoHandler({
   runtime,
   basePath: "/api/copilotkit",
 });
@@ -535,7 +535,7 @@ export default app;
 - No more service adapters (`OpenAIAdapter`, `LangChainAdapter`, etc.) -- model selection is done inside agents
 - No more `actions` array on the runtime -- frontend tools are registered via `useFrontendTool`, backend tools via agent configuration
 - No more `remoteEndpoints` -- agents are passed directly as `AbstractAgent` instances
-- Endpoint setup uses `createCopilotEndpoint` (Hono) or `createCopilotEndpointExpress` (Express) instead of framework-specific integrations
+- Endpoint setup uses `createCopilotHonoHandler` (Hono) or `createCopilotExpressHandler` (Express) instead of framework-specific integrations
 - v2 runtime supports SSE mode and Intelligence mode (durable threads with realtime events)
 
 ### v2 Runtime Modes

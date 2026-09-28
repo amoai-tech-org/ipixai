@@ -11,7 +11,7 @@ Generated: 2026-03-28
 - packages/v1/runtime/src/index.ts (v1 runtime exports: CopilotRuntime, OpenAIAdapter, AnthropicAdapter, GoogleGenerativeAIAdapter, LangChainAdapter, copilotRuntimeNextJSAppRouterEndpoint, copilotKitEndpoint)
 - packages/v1/runtime-client-gql/src/index.ts (v1 GraphQL types: TextMessage, MessageRole, ActionExecutionMessage, ResultMessage)
 - packages/v2/react/src/index.ts (v2 hook exports: useFrontendTool, useAgentContext, useAgent, useInterrupt, useSuggestions, useConfigureSuggestions, useRenderToolCall, useRenderActivityMessage, CopilotKit compat provider -- the recommended migration target; CopilotKitProvider is also exported but is a functionality subset)
-- packages/v2/runtime/src/index.ts (v2 runtime exports: CopilotRuntime, createCopilotEndpoint, createCopilotEndpointExpress, CopilotKitIntelligence)
+- packages/v2/runtime/src/index.ts (v2 runtime exports: CopilotRuntime, createCopilotHonoHandler, createCopilotExpressHandler, CopilotKitIntelligence; createCopilotEndpoint* names are deprecated aliases)
 - packages/v2/agent/src/index.ts (v2 agent exports: BuiltInAgent, defineTool)
 - packages/v2/core/src/ (CopilotKitCore, AG-UI event types, AbstractAgent interface)
 
@@ -21,7 +21,7 @@ Generated: 2026-03-28
 - packages/v1/runtime/src/ (v1 service adapters, CopilotRuntime constructor with actions/remoteEndpoints, framework integration functions)
 - packages/v1/shared/src/ (v1 Parameter type definition)
 - packages/v2/react/src/ (v2 provider props: CopilotKitProviderProps, Zod parameter schemas, useFrontendTool available prop)
-- packages/v2/runtime/src/ (v2 CopilotRuntime constructor with agents/middleware, createCopilotEndpoint Hono-based)
+- packages/v2/runtime/src/ (v2 CopilotRuntime constructor with agents/middleware, createCopilotHonoHandler Hono-based; deprecated endpoint aliases retained for migration context)
 - packages/v2/core/src/ (AG-UI event types, message types replacing GraphQL types)
 - packages/v2/agent/src/ (BuiltInAgent replacing all service adapters)
 

@@ -9,7 +9,7 @@ impact: MEDIUM
 
 Current Mastra reference: https://mastra.ai/blog/introducing-tool-search-processor
 
-Installed `@mastra/core 1.63.2` is new enough for `ToolSearchProcessor`; verify its exact API in installed source/types before use. It exposes search/load behavior so a model does not receive every tool definition on every turn.
+Installed `@mastra/core 1.71.0` exports `ToolSearchProcessor` from `@mastra/core/processors`; verify its exact constructor/options in installed source/types before use. It exposes search/load behavior so a model does not receive every tool definition on every turn.
 
 ## iPix use
 

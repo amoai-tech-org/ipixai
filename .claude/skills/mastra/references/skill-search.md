@@ -7,7 +7,7 @@ impact: MEDIUM
 
 # SkillSearchProcessor
 
-Installed `@mastra/core 1.63.2` contains `SkillSearchProcessor` under `@mastra/core/processors`. Verify its exact constructor/API in installed source/types before use.
+Installed `@mastra/core 1.71.0` exports `SkillSearchProcessor` from `@mastra/core/processors`. Verify its exact constructor/options in installed source/types before use.
 Current Mastra announcement/reference: https://mastra.ai/blog/introducing-skill-search-processor
 Installed embedded reference: `node_modules/@mastra/core/dist/docs/references/reference-processors-skill-search-processor.md`.
 

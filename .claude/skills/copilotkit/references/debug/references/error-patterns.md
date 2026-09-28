@@ -30,7 +30,7 @@ Legacy error codes from the v1 runtime layer. These still surface in `@copilotki
 - **HTTP Status**: 404
 - **Severity**: CRITICAL (banner)
 - **Cause**: The runtime URL returns 404. Wrong basePath or the server is not serving CopilotKit at that path.
-- **Resolution**: Ensure `basePath` in `createCopilotEndpoint()` matches the `runtimeUrl` in the provider.
+- **Resolution**: Ensure `basePath` in `createCopilotHonoHandler()` matches the `runtimeUrl` in the provider.
 - **Docs**: https://docs.copilotkit.ai/troubleshooting/common-issues#i-am-getting-a-network-errors--api-not-found
 
 ### AGENT_NOT_FOUND
@@ -70,7 +70,7 @@ Legacy error codes from the v1 runtime layer. These still surface in `@copilotki
 - **HTTP Status**: 400
 - **Severity**: INFO (dev only)
 - **Cause**: `@copilotkit/*` packages are on different versions.
-- **Resolution**: Ensure all `@copilotkit/*` packages are the same version. Run `npm ls @copilotkit/runtime @copilotkit/react`.
+- **Resolution**: Ensure all `@copilotkit/*` packages are the same version. Verify the installed package family together; for iPix run `npm ls @copilotkit/runtime @copilotkit/react-core @copilotkit/channels @ag-ui/client @ag-ui/mastra`. Do not assume independently-versioned packages such as `@copilotkit/channels` share the runtime semver.
 
 ### CONFIGURATION_ERROR
 

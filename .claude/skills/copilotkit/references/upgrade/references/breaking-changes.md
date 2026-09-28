@@ -251,9 +251,9 @@ v1 had built-in integrations for Next.js (App Router, Pages Router), Express, Ne
 
 | v1 Integration                            | v2 Replacement                                     |
 | ----------------------------------------- | -------------------------------------------------- |
-| `copilotRuntimeNextJSAppRouterEndpoint`   | `createCopilotEndpoint` (Hono, works with Next.js) |
-| `copilotRuntimeNextJSPagesRouterEndpoint` | `createCopilotEndpoint` (Hono)                     |
-| `CopilotRuntimeNodeExpressEndpoint`       | `createCopilotEndpointExpress`                     |
+| `copilotRuntimeNextJSAppRouterEndpoint`   | `createCopilotHonoHandler` (Hono, works with Next.js) |
+| `copilotRuntimeNextJSPagesRouterEndpoint` | `createCopilotHonoHandler` (Hono)                     |
+| `CopilotRuntimeNodeExpressEndpoint`       | `createCopilotExpressHandler`                     |
 | `CopilotRuntimeNestEndpoint`              | Use Hono adapter or Express endpoint               |
 | `CopilotRuntimeNodeHttpEndpoint`          | Use Hono or Express endpoint                       |
 
@@ -270,9 +270,9 @@ export const POST = copilotRuntimeNextJSAppRouterEndpoint({
 });
 
 // v2
-import { createCopilotEndpoint } from "@copilotkit/runtime";
+import { createCopilotHonoHandler } from "@copilotkit/runtime/v2";
 
-const app = createCopilotEndpoint({
+const app = createCopilotHonoHandler({
   runtime,
   basePath: "/api/copilotkit",
   cors: {

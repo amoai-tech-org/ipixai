@@ -54,6 +54,25 @@ artifact_id + revision + canonical_hash + minimal display metadata
 
 Do not trade immutability for snapshot size: the approved hash/revision must still bind to the exact content reviewed.
 
+## CopilotKit bridge choice for HITL — installed adapter truth
+
+Verified 2026-09-28 against installed `@ag-ui/mastra 1.1.4` and CopilotKit React `1.73.3`:
+
+- Mastra **tool** `suspend()` can surface through the adapter as `tool-call-suspended`; the bridge emits a structured AG-UI interrupt and resumes with `resumeStream(... resumeData ...)`. Use CopilotKit `useInterrupt` when the backend contract is this native Mastra suspend checkpoint.
+- Use CopilotKit `useHumanInTheLoop` when the contract is a frontend interactive tool whose call waits for the user's response. It is not a replacement for durable workflow state.
+- Durable business workflows still own their state with Mastra suspend/resume + persisted workflow snapshots. Do not assume a workflow-step suspension is automatically bridged through the agent-tool interrupt path; verify the exact installed path before wiring UI.
+
+For either UI mechanism, the browser response is a decision payload, **not authorization**. Before a consequential continuation, the server revalidates the authenticated actor, tenant, run/step, exact artifact revision/hash, and current domain state, then executes an idempotent authorized action.
+
+Current upstream proofs for the native tool-suspend bridge:
+
+- https://github.com/CopilotKit/CopilotKit/blob/c14e2270f2dc2b63589d0e84110ef174b2853f91/showcase/integrations/mastra/src/mastra/tools/interrupt.ts
+- https://github.com/CopilotKit/CopilotKit/blob/c14e2270f2dc2b63589d0e84110ef174b2853f91/showcase/integrations/mastra/src/app/demos/gen-ui-interrupt/page.tsx
+- https://docs.copilotkit.ai/reference/v2/hooks/useInterrupt
+- https://docs.copilotkit.ai/reference/v2/hooks/useHumanInTheLoop
+
+CopilotKit currently also serves an older Mastra page claiming native interrupts are unsupported. For this installed iPix family, installed adapter source/types and the maintained upstream example above are the compatibility authority. Reverify after any `@ag-ui/mastra` or CopilotKit upgrade.
+
 ## iPix HITL state model
 
 Never represent mandatory review as a boolean truthiness shortcut.
