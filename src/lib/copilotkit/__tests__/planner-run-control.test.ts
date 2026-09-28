@@ -105,6 +105,43 @@ describe("PlannerRunControl", () => {
     await handle.close();
   });
 
+  it("targets replay only to the controller that requested it", async () => {
+    const wire = network();
+    const owner = new PlannerRunControl(wire.openBus, { instanceId: "A", timeoutMs: 100 });
+    const controllerB = new PlannerRunControl(wire.openBus, { instanceId: "B", timeoutMs: 100 });
+    const controllerC = new PlannerRunControl(wire.openBus, { instanceId: "C", timeoutMs: 100 });
+    const handle = await owner.own("thread-multi-controller", "R1", async () => true);
+
+    await handle.publish({
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: "m-multi",
+      role: "assistant",
+    } as BaseEvent);
+
+    const connectionB = await controllerB.connect("thread-multi-controller");
+    const receivedB: BaseEvent[] = [];
+    connectionB?.onEvent((event) => receivedB.push(event));
+    expect(receivedB).toHaveLength(1);
+
+    const connectionC = await controllerC.connect("thread-multi-controller");
+    const receivedC: BaseEvent[] = [];
+    connectionC?.onEvent((event) => receivedC.push(event));
+
+    expect(receivedB).toHaveLength(1);
+    expect(receivedC).toHaveLength(1);
+
+    await handle.publish({
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "m-multi",
+      delta: "live",
+    } as BaseEvent);
+    expect(receivedB).toHaveLength(2);
+    expect(receivedC).toHaveLength(2);
+
+    await Promise.all([connectionB?.close(), connectionC?.close()]);
+    await handle.close();
+  });
+
   it("stops only the exact remote run and fences stale Stop(R1)", async () => {
     const wire = network();
     const stopLocal = vi.fn(async (runId: string) => runId === "R2");
