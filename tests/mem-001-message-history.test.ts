@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
  * IPI-1050 · MEM-001 — prior *normal message history* reaches the next
@@ -178,11 +178,6 @@ describe("IPI-1050 MEM-001: prior normal message history reaches the next Planne
   beforeAll(() => {
     model = recordingModel();
     getProductionPlannerAgent().__updateModel({ model });
-  });
-
-  afterEach(() => {
-    // Keep the recorded calls accumulating across the ordered assertions below;
-    // only the model instance is shared state that matters here.
   });
 
   afterAll(() => {

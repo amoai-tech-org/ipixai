@@ -265,11 +265,22 @@ async function readPhase(ids, expectedFingerprint) {
     );
   }
 
-  // The resource row itself must not hold the fact either.
+  // Working Memory, second guard.
+  //
+  // This is NOT positive evidence. The Planner's Working Memory is resource-scoped
+  // and is persisted only when the model writes it — this deterministic mock never
+  // does, so in the green path there is usually no `mastra_resources` row at all
+  // and this query legitimately matches nothing. The system-message assertion above
+  // is what actually excludes Working Memory as the explanation.
+  //
+  // What this adds is a forward guard: if a Planner change ever starts persisting
+  // Working Memory, a stored copy of the fact fails here. Whether a row existed is
+  // reported so the result cannot be read as more than it is.
   const storedWm = await store.pool.query(
     'SELECT "workingMemory" AS wm FROM mastra.mastra_resources WHERE id = $1',
     [ids.resourceId],
   );
+  const resourceRowPresent = storedWm.rows.length > 0;
   const wmText = storedWm.rows
     .map((row) => (row.wm == null ? "" : JSON.stringify(row.wm)))
     .join("\n");
@@ -298,9 +309,11 @@ async function readPhase(ids, expectedFingerprint) {
     threadId: ids.threadId,
     historyCarried: true,
     workingMemoryCarried: false,
+    // Reported, not asserted: `false` is the expected green-path value and means
+    // the resource-row guard below could not be exercised (see the comment there).
+    resourceRowPresent,
     freshThreadLeak: false,
     fingerprintUnchanged: true,
-    appendedUserMessagesOnly: true,
   };
 }
 
@@ -403,6 +416,7 @@ try {
           readPid: readPayload.pid,
           historyCarried: readPayload.historyCarried,
           workingMemoryCarried: readPayload.workingMemoryCarried,
+          resourceRowPresent: readPayload.resourceRowPresent,
           freshThreadLeak: readPayload.freshThreadLeak,
           fingerprintUnchanged: readPayload.fingerprintUnchanged,
           browserResentHistory: false,
