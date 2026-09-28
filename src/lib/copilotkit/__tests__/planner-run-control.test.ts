@@ -178,6 +178,37 @@ describe("PlannerRunControl", () => {
     await Promise.all([handle1.close(), handle2.close()]);
   });
 
+  it("keeps the first matching owner when two overlapping runs answer one connect request", async () => {
+    const wire = network();
+    const owner1 = new PlannerRunControl(wire.openBus, { instanceId: "A1", timeoutMs: 100 });
+    const owner2 = new PlannerRunControl(wire.openBus, { instanceId: "A2", timeoutMs: 100 });
+    const controller = new PlannerRunControl(wire.openBus, { instanceId: "B", timeoutMs: 100 });
+    const handle1 = await owner1.own("thread-connect-overlap", "R1", async () => true);
+    const handle2 = await owner2.own("thread-connect-overlap", "R2", async () => true);
+
+    const connection = await controller.connect("thread-connect-overlap");
+    expect(connection).toMatchObject({ runId: "R1", ownerInstanceId: "A1" });
+
+    const received: BaseEvent[] = [];
+    connection?.onEvent((event) => received.push(event));
+    await handle1.publish({
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "m-r1",
+      delta: "from-r1",
+    } as BaseEvent);
+    await handle2.publish({
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "m-r2",
+      delta: "from-r2",
+    } as BaseEvent);
+
+    expect(received).toHaveLength(1);
+    expect((received[0] as BaseEvent & { delta?: string }).delta).toBe("from-r1");
+
+    await connection?.close();
+    await Promise.all([handle1.close(), handle2.close()]);
+  });
+
   it("retries connect when the owner subscribes after the first control broadcast", async () => {
     const wire = network();
     const owner = new PlannerRunControl(wire.openBus, { instanceId: "A", timeoutMs: 350 });
