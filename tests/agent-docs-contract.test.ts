@@ -128,6 +128,9 @@ describe("IPI-1370 AGENT-DOCS-001: agent contract files describe the real reposi
     // file an agent should read.
     expect(agents).toContain("`CLAUDE.md` at the repository root — the Claude-only overlay");
     expect(agents).toContain("`.claude/CLAUDE.md` — a directory-scoped file");
+    expect(agents).toContain("Claude-specific overlays apply only within their scope");
+    expect(agents).toContain("further specializes the root `CLAUDE.md` only for work under `.claude/`");
+    expect(agents).not.toContain("It ranks with rule 2 for that subtree");
   });
 
   it("keeps AGENTS.md portable — no machine-local absolute paths", () => {
@@ -178,7 +181,10 @@ describe("IPI-1370 AGENT-DOCS-001: agent contract files describe the real reposi
     const agents = read("AGENTS.md");
     expect(agents).toContain("failed to parse config: missing private key");
     expect(agents).toContain("dotenvx-encrypted `.env.local`");
-    expect(agents).toContain("Disposable Postgres plus this repository's own migrations");
+    expect(agents).toContain("`supabase start` remains the normal local Supabase path when project config loads successfully");
+    expect(agents).toContain("For full Supabase proofs");
+    expect(agents).toContain("For Mastra/Postgres-only proofs");
+    expect(agents).not.toContain("Default writes: **disposable Postgres");
   });
 
   it("documents the npm test gate and the vitest bypass", () => {

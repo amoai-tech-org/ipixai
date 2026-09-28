@@ -7,9 +7,10 @@ Canonical repository instructions for coding agents working on [amoai-tech/ipixa
 1. an explicit instruction from the user in chat — it overrides everything below;
 2. the closest `AGENTS.md` to the file being edited. Nested files exist today: `.claude/skills/vercel-react-best-practices/AGENTS.md` governs that skill's subtree, not this root file;
 3. **this root file** — the repository-wide agent contract;
-4. `CLAUDE.md` at the repository root — the Claude-only overlay. It may add Claude-specific detail; it must not restate or override repository-wide rules;
-5. `.claude/CLAUDE.md` — a directory-scoped file carrying trigger notes (`/graphify`, `/explain`, `/fastest`) for work under `.claude/`. It ranks with rule 2 for that subtree;
-6. domain `SKILL.md` files, project markdown, then Linear prose — until independently verified against the tiers in [Source of truth](#source-of-truth--higher-wins).
+4. Claude-specific overlays apply only within their scope and may add Claude-specific detail, but they must not restate or override rules 2–3:
+   - `CLAUDE.md` at the repository root — the Claude-only overlay;
+   - `.claude/CLAUDE.md` — a directory-scoped file carrying trigger notes (`/graphify`, `/explain`, `/fastest`) — further specializes the root `CLAUDE.md` only for work under `.claude/`;
+5. domain `SKILL.md` files, project markdown, then Linear prose — until independently verified against the tiers in [Source of truth](#source-of-truth--higher-wins).
 
 This repository is the iPix CopilotKit + Mastra runtime. Implement here, in `amoai-tech/ipixai`. Do not implement from a different checkout, or from the old repository name `amo-tech-ai/ipix`.
 
@@ -196,9 +197,9 @@ For tasks touching data/auth/runtime, inspect the existing contract before creat
 - migration/type drift;
 - relevant security findings.
 
-Default writes: **disposable Postgres plus this repository's own pinned `mastra` migrations**, applied to a local server on `127.0.0.1` (the only host `src/mastra/pg-store.ts` accepts outside hosted mode). The exact procedure is below. `supabase start` does **not** work in a working tree that has the dotenvx-encrypted `.env.local` — the normal local setup, and the reason this is the default; see the known breakage below. Hosted reads use the approved non-production target unless the task explicitly says otherwise.
+Default local writes: use the repository's normal local Supabase path when the CLI can load project config; `supabase start` remains the normal local Supabase path when project config loads successfully. If the current working tree has the known dotenvx-encrypted `.env.local` conflict below, do not delete or decrypt that file just to make the CLI run. Choose the fallback by proof scope instead. Hosted reads use the approved non-production target unless the task explicitly says otherwise.
 
-**Known breakage — `supabase start` fails in a working tree that contains the dotenvx-encrypted `.env.local` (verified 2026-09-28).** This is a **local-environment defect, not a repository-wide one**: CI has no `.env.local`, and the `supabase-fresh-replay` job runs the real `supabase start` plus `supabase db reset --local` path successfully on every pull request (`.github/workflows/ci.yml`). The pinned CLI (`supabase` 2.116.0) aborts before touching Docker:
+**Known local-environment breakage (verified 2026-09-28).** On the current workstation setup, `supabase start` fails when the working tree contains the dotenvx-encrypted `.env.local`. This is **not a repository-wide Supabase failure**: CI does not reproduce the conflict, and `supabase-fresh-replay` runs the real `supabase start` plus `supabase db reset --local` path successfully on every pull request (`.github/workflows/ci.yml`). The pinned CLI (`supabase` 2.116.0) aborts before touching Docker:
 
 ```text
 $ supabase start
@@ -207,10 +208,10 @@ failed to parse config: missing private key
 
 Cause is bisected, not guessed: the dotenvx-encrypted `.env.local` (values are `encrypted:…`, plus `DOTENV_PUBLIC_KEY_LOCAL`) is the trigger. The identical `supabase/config.toml` run from a directory *without* `.env.local` passes config parsing and starts containers. It is not `config.toml`, not the ambient shell environment, and not `.env.keys`, `.env.test`, `.env.agent`, or `.env.legacy-retired` — each was tested individually.
 
-Two verified workarounds, in order of preference:
+Two verified fallbacks — choose by the proof you need:
 
-1. **Disposable Postgres plus this repository's own migrations.** Start any local Postgres, create the login role, then apply the pinned `mastra` migrations **in timestamp order** (`20260722093028_mastra_schema_pinned_1_12_0` → `20260722094055_mastra_runtime_grants_and_rls` → `20260822070000_ipi1008_mastra_workflow_definitions` → `20260927194500_ipi1332_mastra_1_71_schema_delta`). `127.0.0.1` is on the `src/mastra/pg-store.ts` allowlist. This is what the `mem-001-restart-history` CI job does, and it needs no new DDL.
-2. **Run the Supabase CLI from a copy of `supabase/` outside this working tree**, so `.env.local` is not discoverable from the CLI's working directory.
+1. **For full Supabase proofs**, run the Supabase CLI from a copy of `supabase/` outside this working tree, so the conflicting root `.env.local` is not discoverable from the CLI's working directory. This preserves the real local Supabase stack instead of substituting a different database path.
+2. **For Mastra/Postgres-only proofs**, use disposable Postgres plus this repository's own migrations. Start local Postgres on `127.0.0.1`, create the login role, then apply the pinned `mastra` migrations **in timestamp order** (`20260722093028_mastra_schema_pinned_1_12_0` → `20260722094055_mastra_runtime_grants_and_rls` → `20260822070000_ipi1008_mastra_workflow_definitions` → `20260927194500_ipi1332_mastra_1_71_schema_delta`). `127.0.0.1` is on the `src/mastra/pg-store.ts` allowlist. This is what the `mem-001-restart-history` CI job does, and it needs no new DDL.
 
 Do not silently fall back to a second database provider to work around this. Report the breakage rather than working around it invisibly, and do not delete `.env.local` (the app needs it).
 
