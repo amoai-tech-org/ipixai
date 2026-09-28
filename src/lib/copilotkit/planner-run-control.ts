@@ -179,22 +179,24 @@ export class PlannerRunControl {
           const firstDelivery = !connectRequests.has(message.requestId);
           connectRequests.add(message.requestId);
 
-          // Queue the ACK and its replay snapshot synchronously. A publish that
-          // races this handler is therefore ordered after the replay instead of
-          // overtaking it. Retries reuse the same requestId, so they resend only
-          // the ACK: any replay events delivered before a lost ACK are already
-          // buffered by the controller and must not be duplicated.
-          let response = enqueue({
-            kind: "connect_ack",
-            requestId: message.requestId,
-            runId,
-            ownerInstanceId: this.instanceId,
-          });
+          // On the first delivery, queue the active-run replay before the ACK.
+          // The controller buffers events until it receives the matching ACK,
+          // so connect() cannot resolve before all pre-connect events are ready
+          // for onEvent(). A racing publish is queued after this synchronous
+          // replay+ACK batch. Retries reuse requestId and therefore send only
+          // the ACK; already-delivered replay events are not duplicated.
+          let response = Promise.resolve();
           if (firstDelivery) {
             for (const event of replayBuffer) {
               response = enqueue({ kind: "event", runId, event });
             }
           }
+          response = enqueue({
+            kind: "connect_ack",
+            requestId: message.requestId,
+            runId,
+            ownerInstanceId: this.instanceId,
+          });
           await response;
           return;
         }
