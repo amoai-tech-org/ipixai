@@ -155,15 +155,22 @@ describe("Playwright E2E harness hardening", () => {
     // IPI-1332 · CERT-INTEGRITY-001 — the certified spec list is declared once
     // at workflow level and the run step consumes it, so assert the EFFECTIVE
     // list rather than one step's literal text: a check on the literal text can
-    // pass while the workflow actually runs something else.
+    // pass while the workflow actually runs something else. Assert the COMPLETE
+    // list, not a subset — a subset still passes if the list loses the very spec
+    // whose omission caused the false-green this guard exists to prevent.
     const certified = String(workflow.env?.CERT_SPECS ?? "");
-    for (const spec of [
+    expect(
+      certified
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+      "CERT_SPECS must declare exactly the certified Planner journeys",
+    ).toEqual([
       "e2e/planner-stop-journey.spec.ts",
       "e2e/planner-journey.spec.ts",
       "e2e/planner-thread-isolation.spec.ts",
-    ]) {
-      expect(certified, `CERT_SPECS must declare ${spec}`).toContain(spec);
-    }
+      "e2e/planner-workflows.spec.ts",
+    ]);
     // The run step must consume the declared list rather than keep its own copy.
     expect(journey?.run).toContain("$CERT_SPECS");
 
@@ -172,6 +179,45 @@ describe("Playwright E2E harness hardening", () => {
     // explanatory comment cannot satisfy or break this check.
     expect(certified).not.toContain("brand-intelligence-journey.spec.ts");
     expect(journey?.run).not.toContain("brand-intelligence-journey.spec.ts");
+  });
+
+  // IPI-1332 · CERT-INTEGRITY-001 regression — the run step expands
+  // `CERT_SPECS` into a bash array. `read -r -a` reads only the FIRST line, so a
+  // multi-line declaration silently shrank to a single spec — narrowing the
+  // certified set in exactly the way this workflow exists to prevent. Execute
+  // the workflow's own expansion line against its own declared list, so a
+  // regression to a first-line-only reader fails here.
+  it("expands every declared certified spec when the Preview workflow runs", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), ".github/workflows/vercel-preview.yml"),
+      "utf8",
+    );
+    const workflow = (parse(source) ?? {}) as { env?: Record<string, string> };
+    const declared = String(workflow.env?.CERT_SPECS ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    expect(declared.length, "a multi-line declaration is the case this guards").toBeGreaterThan(1);
+
+    const job = workflowJob(source, "deploy");
+    const journey = (job.steps ?? []).find((step) =>
+      step.run?.includes("npx playwright test"),
+    );
+    const expander = (journey?.run ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => /^(mapfile|read)\b/.test(line) && line.includes("specs"));
+    expect(expander, "the journey step must expand CERT_SPECS into an array").toBeDefined();
+
+    const expansion = spawnSync("bash", ["-c", `${expander}\nprintf '%s\\n' "\${specs[@]}"`], {
+      encoding: "utf8",
+      env: { ...process.env, CERT_SPECS: declared.join("\n") },
+    });
+    expect(expansion.status, expansion.stderr).toBe(0);
+    expect(
+      expansion.stdout.split("\n").filter(Boolean),
+      "the run step must pass every declared spec to Playwright",
+    ).toEqual(declared);
   });
 
   // IPI-1332 · CERT-INTEGRITY-001 regression — a workflow_dispatch runs the

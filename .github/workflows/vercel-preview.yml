@@ -82,16 +82,25 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Read the declared list from the `CERT_SPECS:` block ONLY. Grepping
+          # the whole file would also match a spec path that appears in a
+          # comment, so a merely-documented spec could be treated as declared and
+          # the comparison below could pass while that spec never runs.
+          cert_specs_of() {
+            sed -n '/^[[:space:]]*CERT_SPECS:[[:space:]]*|/,/^[^[:space:]]/p' "$1" \
+              | grep -oE 'e2e/[a-z0-9-]+\.spec\.ts' | sort -u
+          }
+
           # The workspace copy is the CANDIDATE SHA's (actions/checkout used
           # `ref: inputs.sha`): this is the list the candidate intends to run.
-          mapfile -t candidate < <(grep -oE 'e2e/[a-z0-9-]+\.spec\.ts' "$WORKFLOW_PATH" | sort -u)
+          mapfile -t candidate < <(cert_specs_of "$WORKFLOW_PATH")
 
           # The RUNNING file is the one GitHub compiled into this job, i.e. the
           # dispatch ref's copy. Fetch that ref so the dispatched commit's
           # objects are present, then read the exact commit GitHub dispatched on.
           git fetch --no-tags origin "$RUNNING_REF"
           git show "$RUNNING_REF_SHA:$WORKFLOW_PATH" > /tmp/running-workflow.yml
-          mapfile -t running < <(grep -oE 'e2e/[a-z0-9-]+\.spec\.ts' /tmp/running-workflow.yml | sort -u)
+          mapfile -t running < <(cert_specs_of /tmp/running-workflow.yml)
 
           echo "Certified spec list — running workflow (${RUNNING_REF} @ ${RUNNING_REF_SHA}):"
           printf '  %s\n' "${running[@]}"
@@ -99,7 +108,7 @@ jobs:
           printf '  %s\n' "${candidate[@]}"
 
           if [ "${#candidate[@]}" -eq 0 ]; then
-            echo "::error::${CANDIDATE_SHA} declares no e2e specs to certify" >&2
+            echo "::error::${CANDIDATE_SHA} declares no certified specs in the ${WORKFLOW_PATH} CERT_SPECS block. Certify a commit that carries this declaration (any commit at or after the one that introduced CERT_SPECS)." >&2
             exit 1
           fi
           for spec in "${candidate[@]}"; do
@@ -108,6 +117,11 @@ jobs:
               exit 1
             fi
           done
+
+          if [ "${#running[@]}" -eq 0 ]; then
+            echo "::error::the workflow that ran (${RUNNING_REF} @ ${RUNNING_REF_SHA}) has no CERT_SPECS block, so its certified list cannot be verified. Re-dispatch with --ref on a branch that carries the same declaration as ${CANDIDATE_SHA}." >&2
+            exit 1
+          fi
 
           if [ "${running[*]}" != "${candidate[*]}" ]; then
             echo "::error title=Certifying a different spec list than the candidate declares::the workflow that ran came from ${RUNNING_REF} (${RUNNING_REF_SHA}), but ${CANDIDATE_SHA} declares a different spec list. Re-dispatch with --ref set to the branch containing ${CANDIDATE_SHA}." >&2
@@ -197,11 +211,19 @@ jobs:
           # against a Preview by accident.
           # `CERT_SPECS` is the workflow-level declared list; the step above has
           # already proved it equals the candidate SHA's own copy of that list.
-          if [ -z "${CERT_SPECS:-}" ]; then
+          declared="$(printf '%s\n' "${CERT_SPECS:-}" | grep -cE 'e2e/[a-z0-9-]+\.spec\.ts' || true)"
+          if [ "${declared:-0}" -eq 0 ]; then
             echo "::error::CERT_SPECS is empty; refusing to run an unbounded spec set" >&2
             exit 1
           fi
-          read -r -a specs <<< "$CERT_SPECS"
+          # `mapfile -t` reads EVERY line. `read -r -a` reads only the FIRST, so
+          # it silently shrinks a multi-line list to a single spec — the same
+          # class of silent narrowing this workflow exists to prevent.
+          mapfile -t specs <<< "$CERT_SPECS"
+          if [ "${#specs[@]}" -ne "$declared" ]; then
+            echo "::error::expanded ${#specs[@]} spec(s) but ${declared} were declared; refusing to run a partial certification" >&2
+            exit 1
+          fi
           echo "Running ${#specs[@]} certified spec file(s):"
           printf '  %s\n' "${specs[@]}"
           PLAYWRIGHT_BROWSERS_PATH=0 npx playwright test \
