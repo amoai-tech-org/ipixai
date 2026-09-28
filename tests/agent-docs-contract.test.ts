@@ -1,5 +1,4 @@
 import { readFileSync, existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -21,9 +20,13 @@ import { describe, expect, it } from "vitest";
  * local-only and legitimately absent in CI:
  *   - `graphify-out/**`   — generated analysis state, gitignored, never shipped
  *   - `.env*`             — local secret files, gitignored
+ *
+ * What the scanner does and does NOT cover, so the guarantee is not overstated:
+ * it reads inline-code references (`` `src/a.ts` ``) and repository-relative
+ * Markdown links, matched against `TRACKED_PREFIXES` plus `BARE_FILES`. A path
+ * written as bare prose, or under a directory absent from `TRACKED_PREFIXES`,
+ * is NOT validated. Add the prefix when a doc starts referencing a new tree.
  */
-
-const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 function read(relativePath: string): string {
   return readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
@@ -75,26 +78,33 @@ function referencedPaths(source: string): string[] {
 }
 
 describe("IPI-1370 AGENT-DOCS-001: agent contract files describe the real repository", () => {
-  it.each(DOCS)("%s references only repository paths that exist", (doc) => {
-    const missing = referencedPaths(read(doc)).filter(
-      (value) => !existsSync(new URL(`../${value}`, import.meta.url)),
-    );
-    expect(
-      missing,
-      `${doc} references path(s) that do not exist: ${missing.join(", ")}. ` +
-        "Either create the path, or update the reference — do not leave the contract stale.",
-    ).toEqual([]);
-  });
+  it.each(DOCS)(
+    "%s references only existing paths, for the inline-code and relative-link forms it scans",
+    (doc) => {
+      const missing = referencedPaths(read(doc)).filter(
+        (value) => !existsSync(new URL(`../${value}`, import.meta.url)),
+      );
+      expect(
+        missing,
+        `${doc} references path(s) that do not exist: ${missing.join(", ")}. ` +
+          "Either create the path, or update the reference — do not leave the contract stale.",
+      ).toEqual([]);
+      // Guard against the scanner silently matching nothing.
+      expect(referencedPaths(read(doc)).length).toBeGreaterThan(3);
+    },
+  );
 
   it.each(DOCS)("%s names only npm scripts that exist in package.json", (doc) => {
     const scripts = Object.keys(
       JSON.parse(read("package.json")).scripts ?? {},
     ) as string[];
-    const named = new Set(
-      (read(doc).match(/npm run ([a-zA-Z0-9:_-]+)/g) ?? []).map((m) =>
-        m.replace("npm run ", ""),
-      ),
-    );
+    const source = read(doc);
+    const named = new Set<string>();
+    for (const match of source.match(/npm run ([a-zA-Z0-9:_-]+)/g) ?? []) {
+      named.add(match.replace("npm run ", ""));
+    }
+    // `npm test` invokes the `test` lifecycle script directly (with `pretest`).
+    for (const _match of source.match(/npm test\b/g) ?? []) named.add("test");
     const unknown = [...named].filter((name) => !scripts.includes(name));
     expect(
       unknown,
@@ -112,6 +122,12 @@ describe("IPI-1370 AGENT-DOCS-001: agent contract files describe the real reposi
     // Nested AGENTS.md files must be named, not described as hypothetical:
     // they already exist and the closest one wins for its subtree.
     expect(agents).toContain(".claude/skills/vercel-react-best-practices/AGENTS.md");
+    // Both Claude files must be placed correctly, and they are different files:
+    // the root CLAUDE.md is the overlay; .claude/CLAUDE.md is directory-scoped
+    // trigger notes for work under .claude/. Conflating them mis-states which
+    // file an agent should read.
+    expect(agents).toContain("`CLAUDE.md` at the repository root — the Claude-only overlay");
+    expect(agents).toContain("`.claude/CLAUDE.md` — a directory-scoped file");
   });
 
   it("keeps AGENTS.md portable — no machine-local absolute paths", () => {
@@ -137,9 +153,12 @@ describe("IPI-1370 AGENT-DOCS-001: agent contract files describe the real reposi
       "## Git / task safety",
       "## Graphify",
     ];
+    // Exact line equality, not a constructed RegExp: the headings are static,
+    // and a plain string comparison says exactly what it does.
+    const claudeLines = claude.split("\n");
     for (const heading of ownedByAgents) {
       expect(
-        new RegExp(`^${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m").test(claude),
+        claudeLines.includes(heading),
         `CLAUDE.md restates "${heading}", which AGENTS.md owns — use a pointer instead.`,
       ).toBe(false);
     }

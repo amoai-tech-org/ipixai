@@ -64,7 +64,7 @@ These are **outstanding**, not historical. They were written as "after PR #106 m
 
 Prefer `.claude/skills/<name>/SKILL.md` for reusable procedures. `.claude/commands/` files are compatibility shims only when an equivalent project skill exists.
 
-For important behavioral skills such as `pr`, keep realistic prompts in `evals/evals.json` and compare a changed skill against the previous version before claiming the rewrite is better. Keep trigger conditions in the skill description, keep `SKILL.md` concise, and move detailed material into supporting references/scripts when needed.
+For important behavioral skills such as `pr`, keep realistic prompts in that skill's own `evals/evals.json` (for example `.claude/skills/pr/evals/evals.json`) and compare a changed skill against the previous version before claiming the rewrite is better. Keep trigger conditions in the skill description, keep `SKILL.md` concise, and move detailed material into supporting references/scripts when needed.
 
 Side-effecting skills must require explicit user invocation or an equally strong human approval boundary. In particular, `/pr` is user-controlled and bare `/pr` is read-only; commit/push requires explicit `/pr ship`.
 

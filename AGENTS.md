@@ -7,8 +7,9 @@ Canonical repository instructions for coding agents working on [amoai-tech/ipixa
 1. an explicit instruction from the user in chat — it overrides everything below;
 2. the closest `AGENTS.md` to the file being edited. Nested files exist today: `.claude/skills/vercel-react-best-practices/AGENTS.md` governs that skill's subtree, not this root file;
 3. **this root file** — the repository-wide agent contract;
-4. `.claude/CLAUDE.md` — a Claude-only overlay. It may add Claude-specific detail; it must not restate or override repository-wide rules;
-5. domain `SKILL.md` files, project markdown, then Linear prose — until independently verified against the tiers in [Source of truth](#source-of-truth--higher-wins).
+4. `CLAUDE.md` at the repository root — the Claude-only overlay. It may add Claude-specific detail; it must not restate or override repository-wide rules;
+5. `.claude/CLAUDE.md` — a directory-scoped file carrying trigger notes (`/graphify`, `/explain`, `/fastest`) for work under `.claude/`. It ranks with rule 2 for that subtree;
+6. domain `SKILL.md` files, project markdown, then Linear prose — until independently verified against the tiers in [Source of truth](#source-of-truth--higher-wins).
 
 This repository is the iPix CopilotKit + Mastra runtime. Implement here, in `amoai-tech/ipixai`. Do not implement from a different checkout, or from the old repository name `amo-tech-ai/ipix`.
 
@@ -195,7 +196,7 @@ For tasks touching data/auth/runtime, inspect the existing contract before creat
 - migration/type drift;
 - relevant security findings.
 
-Default writes: local `supabase start`. Hosted reads use the approved non-production target unless the task explicitly says otherwise.
+Default writes: **disposable Postgres plus this repository's own pinned `mastra` migrations**, per the procedure below. `supabase start` does **not** work in this working tree — do not follow it as the default. Hosted reads use the approved non-production target unless the task explicitly says otherwise.
 
 **Known breakage — `supabase start` fails in this repository (verified 2026-09-28).** The pinned CLI (`supabase` 2.116.0) aborts before touching Docker:
 
