@@ -16,6 +16,7 @@ This file records the currently installed compatibility family. `package.json` a
 | `@mastra/pg` | 1.27.1 |
 | `@mastra/client-js` | 1.50.0 |
 | `mastra` | 1.31.3 |
+| `next` | 16.3.5 |
 
 ## Runtime contract
 

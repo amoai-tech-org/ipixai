@@ -340,10 +340,14 @@ describe("iPix engineering skill contracts", () => {
     // the same "exists and never runs" defect it was added to prevent — for those
     // methods. Deriving the set keeps the snippet and the route in step.
     expect(integration).toContain('from "hono/vercel"');
-    const routeHandlers = [
-      ...readRepoFile(ROUTE_HANDLERS_FILE).matchAll(/^export const ([A-Z]+) = /gm),
-    ]
-      .map((match) => match[1])
+    // Tolerant of the export syntax the route might adopt: a named const, an
+    // async function, or a plain function. A narrower pattern would silently
+    // shorten the expected set if the route were restyled, and the comparison
+    // below would then be checking the wrong thing rather than failing loudly.
+    const HANDLER_EXPORT = /^export (?:const ([A-Z]+) =|(?:async )?function ([A-Z]+)\()/gm;
+    const routeHandlers = [...readRepoFile(ROUTE_HANDLERS_FILE).matchAll(HANDLER_EXPORT)]
+      .map((match) => match[1] ?? match[2] ?? "")
+      .filter(Boolean)
       .sort();
     const documentedHandlers = [...integration.matchAll(/^export const ([A-Z]+) = handler;/gm)]
       .map((match) => match[1])
