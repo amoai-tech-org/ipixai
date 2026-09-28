@@ -221,7 +221,7 @@ Rules: `.cursor/rules/`. Canonical skill source tree: `.agents/skills/`. Claude 
 
 ### Merge authority — human approval is mandatory
 
-An agent may open, update, review and fully prepare a pull request. An agent must **never merge one**, however green the checks look.
+An agent may open, update, review and fully prepare a pull request. Merging is a **human action**: an agent hands the pull request back to a human owner for the merge, however green the checks look.
 
 Merging requires all three of the following:
 
@@ -229,7 +229,7 @@ Merging requires all three of the following:
 2. **The PR body's pre-merge checklist reviewed and updated** so every ticked box reflects verified evidence at the current head. No stale ticks, no ticks inherited from an earlier revision, and no ticks for work that only exists locally or was merely assumed.
 3. **The PR body's success criteria reviewed and updated** against that same evidence — including any criterion that turned out to be unprovable or was deliberately descoped. Mark those explicitly instead of silently deleting them.
 
-If any gate cannot be satisfied, leave the PR open, say exactly which item is missing, and hand it back. Never merge on the agent's own judgement.
+If any gate cannot be satisfied, leave the PR open, say exactly which item is missing, and hand it back to that human owner — the merge decision is theirs, and an agent does not substitute its own judgement for it.
 
 - Title: `IPI-NNN · TASK-ID — Plain English title`.
 - One coherent concern; no unrelated dirty files.
