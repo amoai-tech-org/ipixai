@@ -167,7 +167,7 @@ useRenderTool(
 | `useComponent`             | Register a React component as a chat-rendered tool (convenience wrapper around `useFrontendTool`) |
 | `useAgentContext`          | Share JSON-serializable application state with the agent                                          |
 | `useAgent`                 | Get the `AbstractAgent` instance for an agent ID; subscribe to message/state/run-status changes   |
-| `useInterrupt`             | Handle `on_interrupt` events from agents with render + optional handler/`enabled` predicate       |
+| `useInterrupt`             | Handle AG-UI standard interrupt outcomes plus legacy `on_interrupt`; resolve/cancel to resume     |
 | `useHumanInTheLoop`        | Register a tool that pauses execution until the user responds via a rendered UI                   |
 | `useRenderTool`            | Register a renderer for tool calls (by name or wildcard `"*"`)                                    |
 | `useDefaultRenderTool`     | Register a wildcard `"*"` renderer using the built-in expandable card UI                          |

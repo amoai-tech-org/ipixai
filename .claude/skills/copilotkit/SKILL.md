@@ -11,13 +11,13 @@ description: >
   references/debug/debug.md. Do NOT use for Supabase-only migrations/RLS, Mercur checkout,
   shadcn-only UI tweaks, Gemini edge prompts, or Linear issue updates without CopilotKit code.
 metadata:
-  version: 2.2.1-ipix.1
+  version: 2.2.1-ipix.2
   priority: 2
 ---
 
 # CopilotKit Skills Hub
 
-**iPixai:** this repo is the CopilotKit + Mastra **starter** (`src/app`, `src/mastra`, split `dev:ui` / `dev:agent`). Prefer `references/integrations/references/integrations/mastra.md` + `references/runtime/references/wiring-mastra.md`. Treat `references/ipix-production.md` as **old Lumina/Vercel notes** until this app has its own prod runbook.
+**iPixai:** this repo is the current CopilotKit + Mastra Product runtime (`src/app`, `src/mastra`, split `dev:ui` / `dev:agent`). Prefer `references/integrations/references/integrations/mastra.md` + `references/runtime/references/wiring-mastra.md`. `references/ipix-production.md` is the current iPix Production runbook; verify it against the task SHA and installed package source/types before changing runtime behavior.
 
 One consolidated CopilotKit plugin skill. **Load the matching `references/` file on demand** — do not
 paste reference bodies here. Each topic folder keeps its own `references/` sub-docs and `assets/`.

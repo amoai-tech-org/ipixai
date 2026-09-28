@@ -7,7 +7,7 @@ impact: MEDIUM
 
 # Advanced runtime capabilities
 
-Use installed embedded docs first; these capabilities exist in installed `@mastra/core 1.63.2`.
+Verified against installed `@mastra/core 1.71.0`; use installed source/types and the embedded docs below before adopting any advanced runtime capability.
 
 | Capability | Installed doc | iPix fit |
 | --- | --- | --- |

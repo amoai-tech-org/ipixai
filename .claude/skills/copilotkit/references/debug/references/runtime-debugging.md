@@ -42,11 +42,11 @@ CopilotKit v2 runtime (`@copilotkit/runtime`) runs as a Hono HTTP server. It exp
 
    Expected response: JSON with `version`, `agents`, `mode` fields.
 
-2. **Check basePath alignment**: The `basePath` in `createCopilotEndpoint()` must match the `runtimeUrl` on the `CopilotKit` provider (from `@copilotkit/react-core/v2`):
+2. **Check basePath alignment**: The `basePath` in `createCopilotHonoHandler()` must match the `runtimeUrl` on the `CopilotKit` provider (from `@copilotkit/react-core/v2`):
 
    ```ts
    // Server
-   createCopilotEndpoint({ runtime, basePath: "/api/copilotkit" });
+   createCopilotHonoHandler({ runtime, basePath: "/api/copilotkit" });
 
    // Client
    <CopilotKit runtimeUrl="/api/copilotkit">
@@ -78,7 +78,7 @@ CopilotKit v2 runtime (`@copilotkit/runtime`) runs as a Hono HTTP server. It exp
 
 ### Default CORS Behavior
 
-When no `cors` option is provided to `createCopilotEndpoint`, the runtime defaults to:
+When no `cors` option is provided to `createCopilotHonoHandler`, the runtime defaults to:
 
 - `origin: "*"` (all origins allowed)
 - `credentials: false`
@@ -90,7 +90,7 @@ When no `cors` option is provided to `createCopilotEndpoint`, the runtime defaul
 When using HTTP-only cookies for authentication, you must configure CORS explicitly:
 
 ```ts
-createCopilotEndpoint({
+createCopilotHonoHandler({
   runtime,
   basePath: "/api/copilotkit",
   cors: {
@@ -113,7 +113,7 @@ On the client side, enable credentials:
 
 | Browser Error                                   | Cause                                    | Fix                                                                                     |
 | ----------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------- |
-| "No 'Access-Control-Allow-Origin' header"       | Runtime not sending CORS headers         | Verify `createCopilotEndpoint` is handling the request (not a 404 from another handler) |
+| "No 'Access-Control-Allow-Origin' header"       | Runtime not sending CORS headers         | Verify `createCopilotHonoHandler` is handling the request (not a 404 from another handler) |
 | "Credential is not supported if origin is '\*'" | `credentials: true` with wildcard origin | Set an explicit `origin` in the CORS config                                             |
 | "Method PUT is not allowed"                     | Preflight failure                        | Ensure the runtime's CORS allows the method (default config allows all)                 |
 | CORS error only in production                   | Different origins in dev vs prod         | Update the `origin` config for the production domain                                    |

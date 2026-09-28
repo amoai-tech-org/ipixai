@@ -73,11 +73,11 @@ Complete mapping of every deprecated v1 API to its v2 replacement.
 
 | v1 Function                               | v1 Package            | v2 Replacement                 | v2 Package            | Status                 |
 | ----------------------------------------- | --------------------- | ------------------------------ | --------------------- | ---------------------- |
-| `copilotRuntimeNextJSAppRouterEndpoint`   | `@copilotkit/runtime` | `createCopilotEndpoint`        | `@copilotkit/runtime` | **Removed** (use Hono) |
-| `copilotRuntimeNextJSPagesRouterEndpoint` | `@copilotkit/runtime` | `createCopilotEndpoint`        | `@copilotkit/runtime` | **Removed** (use Hono) |
-| `CopilotRuntimeNodeExpressEndpoint`       | `@copilotkit/runtime` | `createCopilotEndpointExpress` | `@copilotkit/runtime` | Renamed                |
-| `CopilotRuntimeNestEndpoint`              | `@copilotkit/runtime` | `createCopilotEndpoint`        | `@copilotkit/runtime` | **Removed** (use Hono) |
-| `CopilotRuntimeNodeHttpEndpoint`          | `@copilotkit/runtime` | `createCopilotEndpoint`        | `@copilotkit/runtime` | **Removed** (use Hono) |
+| `copilotRuntimeNextJSAppRouterEndpoint`   | `@copilotkit/runtime` | `createCopilotHonoHandler`     | `@copilotkit/runtime/v2` | **Removed** (use Hono) |
+| `copilotRuntimeNextJSPagesRouterEndpoint` | `@copilotkit/runtime` | `createCopilotHonoHandler`     | `@copilotkit/runtime/v2` | **Removed** (use Hono) |
+| `CopilotRuntimeNodeExpressEndpoint`       | `@copilotkit/runtime` | `createCopilotExpressHandler`  | `@copilotkit/runtime/v2` | Renamed                |
+| `CopilotRuntimeNestEndpoint`              | `@copilotkit/runtime` | `createCopilotHonoHandler`     | `@copilotkit/runtime/v2` | **Removed** (use Hono) |
+| `CopilotRuntimeNodeHttpEndpoint`          | `@copilotkit/runtime` | `createCopilotHonoHandler`     | `@copilotkit/runtime/v2` | **Removed** (use Hono) |
 
 ## Types
 

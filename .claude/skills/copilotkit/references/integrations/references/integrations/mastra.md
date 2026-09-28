@@ -1,154 +1,181 @@
-# Mastra Integration
+# Mastra Integration — current iPix contract
 
-Mastra is a TypeScript-native agent framework. The CopilotKit integration runs entirely in Node.js -- no separate Python server needed. The agent runs within the Next.js process via Mastra's dev server.
+Use this reference when wiring or reviewing CopilotKit + Mastra in iPix. It is an **iPix overlay**, not a generic starter.
 
-## Prerequisites
+## Source priority
 
-- Node.js 18+
-- OpenAI API key
+For version-sensitive decisions:
 
-## Key Dependencies
+1. current iPix `package.json` + lockfile;
+2. installed package source/types;
+3. current iPix runtime files;
+4. pinned maintained CopilotKit Mastra example;
+5. live CopilotKit docs/MCP.
 
-**Do not copy version labels from this example into iPix.** The upstream skill text has historically lagged the maintained example and may still mention beta packages.
+Do not copy dependency pins, demo auth, in-memory storage, or demo agent names from an upstream example into iPix.
 
-For iPix, verify in this order before changing dependencies:
+## Current installed iPix family — verified 2026-09-28
 
-1. `/home/sk/ipixai/package.json` + lockfile
-2. installed package source/types
-3. current maintained example: https://github.com/CopilotKit/CopilotKit/tree/main/examples/integrations/mastra
-4. live CopilotKit docs/MCP
+| Package | iPix pin |
+| --- | ---: |
+| `@copilotkit/runtime` | `1.73.3` |
+| `@copilotkit/react-core` | `1.73.3` |
+| `@copilotkit/channels` | `0.11.0` |
+| `@ag-ui/client` | `0.0.59` |
+| `@ag-ui/mastra` | `1.1.4` |
+| `@mastra/core` | `1.71.0` |
+| `@mastra/memory` | `1.32.1` |
+| `@mastra/pg` | `1.27.1` |
+| `@mastra/client-js` | `1.50.0` |
 
-Current audited iPix family (2026-09-04): `@copilotkit/runtime 1.68.1`, `@copilotkit/react-core 1.68.1`, `@ag-ui/mastra 1.1.2`, `@mastra/core 1.63.2`, `@mastra/memory 1.28.1`. Re-check at task execution time.
+These are the current **installed iPix pins**, not a command to install `latest`. Re-check npm/official release guidance at execution time; any dependency-family change requires a separate upgrade task and compatibility proof.
 
-Current maintained CopilotKit Mastra example (verified 2026-09-04/05) uses `@copilotkit/runtime 1.70.0`, `@copilotkit/react-core 1.70.0`, `@ag-ui/mastra 1.1.2`. Its Mastra package versions are **example choices, not iPix upgrade authority**; some are older/alpha relative to iPix. Use the example for bridge shape and current CopilotKit family, then verify Mastra from iPix installed source/types and the Mastra skill/docs.
+## Current Production architecture
 
-**Never add `--legacy-peer-deps` just because an old bundled example says to.** First prove a real peer conflict against the installed/current package family.
-
-## Agent Definition (src/mastra/agents/index.ts)
-
-```typescript
-import { openai } from "@ai-sdk/openai";
-import { Agent } from "@mastra/core/agent";
-import { weatherTool } from "@/mastra/tools";
-import { LibSQLStore } from "@mastra/libsql";
-import { z } from "zod";
-import { Memory } from "@mastra/memory";
-
-// Define shared state schema with Zod
-export const AgentState = z.object({
-  proverbs: z.array(z.string()).default([]),
-});
-
-export const weatherAgent = new Agent({
-  id: "weather-agent",
-  name: "Weather Agent",
-  tools: { weatherTool },
-  model: openai("gpt-4o"),
-  instructions: "You are a helpful assistant.",
-  memory: new Memory({
-    storage: new LibSQLStore({
-      id: "weather-agent-memory",
-      url: "file::memory:",
-    }),
-    options: {
-      workingMemory: {
-        enabled: true,
-        schema: AgentState,
-      },
-    },
-  }),
-});
+```text
+/app Production Copilot
+→ same-origin /api/copilotkit
+→ requirePlannerResourceId()
+→ server-derived org + user resourceId
+→ createLocalAgents(resourceId)
+→ MastraAgent.getLocalAgents({ mastra, resourceId })
+→ TenantAbortRunner
+→ in-process Mastra Production Planner
+→ Mastra Memory
+→ PostgresStore
+→ MASTRA_DATABASE_URL
+→ Supabase `mastra` schema
 ```
 
-Key patterns:
+Load-bearing iPix owners:
 
-- Shared state is defined as a Zod schema and passed to Mastra's `Memory` via `workingMemory.schema`
-- Tools are created with Mastra's `createTool()` helper
-- The agent uses `@ai-sdk/openai` for the model provider
+- `src/app/api/copilotkit/[[...slug]]/route.ts` — authenticated CopilotKit endpoint and local runtime selection;
+- `src/agent.ts` — canonical `default` agent key and `createLocalAgents(resourceId)`;
+- `src/mastra/runtime.ts` — Mastra registry for the Production Planner and workflows;
+- `src/lib/copilotkit/tenant-abort-runner.ts` — tenant-scoped exact-run Stop behavior;
+- `src/mastra/pg-store.ts` — guarded `PostgresStore` / `MASTRA_DATABASE_URL` storage.
 
-## Tools (src/mastra/tools/index.ts)
+The Product route deliberately does **not** select hosted CopilotKit Intelligence or remote Mastra from environment variables. Legacy remote helpers remain only until `IPI-1334` cleanup and are not the Production architecture.
 
-```typescript
-import { createTool } from "@mastra/core/tools";
-import { z } from "zod";
+## Minimal current route shape
 
-export const weatherTool = createTool({
-  id: "get-weather",
-  description: "Get current weather for a location",
-  inputSchema: z.object({
-    location: z.string().describe("City name"),
-  }),
-  outputSchema: z.object({
-    temperature: z.number(),
-    feelsLike: z.number(),
-    humidity: z.number(),
-    windSpeed: z.number(),
-    windGust: z.number(),
-    conditions: z.string(),
-    location: z.string(),
-  }),
-  execute: async (inputData) => {
-    // Call weather API...
-    return await getWeather(inputData.location);
-  },
-});
-```
-
-## Mastra Instance (src/mastra/index.ts)
-
-```typescript
-import { Mastra } from "@mastra/core/mastra";
-import { LibSQLStore } from "@mastra/libsql";
-import { weatherAgent } from "./agents";
-
-export const mastra = new Mastra({
-  agents: { weatherAgent },
-  storage: new LibSQLStore({ id: "mastra-storage", url: ":memory:" }),
-});
-```
-
-## Next.js Route (src/app/api/copilotkit/[[...slug]]/route.ts)
-
-```typescript
-import {
-  CopilotRuntime,
-  createCopilotHonoHandler,
-  InMemoryAgentRunner,
-} from "@copilotkit/runtime/v2";
-import { MastraAgent } from "@ag-ui/mastra";
-import { mastra } from "@/mastra";
+```ts
+import { CopilotRuntime, createCopilotHonoHandler } from "@copilotkit/runtime/v2";
 import { handle } from "hono/vercel";
+import { createLocalAgents } from "@/agent";
+import { requirePlannerResourceId } from "@/lib/auth/planner-session";
+import { TenantAbortRunner, attachRunnerAbort } from "@/lib/copilotkit/tenant-abort-runner";
 
+const session = await requirePlannerResourceId(request);
+if (!session.ok) return session.response;
+
+const resourceId = session.resourceId;
 const runtime = new CopilotRuntime({
-  agents: MastraAgent.getLocalAgents({ mastra }),
-  runner: new InMemoryAgentRunner(),
+  agents: attachRunnerAbort(createLocalAgents(resourceId)),
+  runner: new TenantAbortRunner(resourceId, request.signal),
+  // identifyUser + auth hooks are also required by the real route.
 });
 
 const app = createCopilotHonoHandler({
   runtime,
   basePath: "/api/copilotkit",
+  // real iPix route also supplies tenant-scoped hooks.
 });
 
-export const GET = handle(app);
-export const POST = handle(app);
-export const PATCH = handle(app);
-export const DELETE = handle(app);
+// Export the App Router handlers. Building `app` alone produces a route that
+// exists but never runs, so these exports are part of the contract, not
+// boilerplate. iPix uses the Vercel adapter — `handle(app)` from `hono/vercel`;
+// `app.fetch` is the Hono-native form and is not what this route uses.
+const handler = handle(app);
+export const GET = handler;
+export const POST = handler;
+export const PATCH = handler;
+export const DELETE = handler;
 ```
 
-Key difference from other integrations: `MastraAgent.getLocalAgents({ mastra })` automatically discovers all agents registered in the Mastra instance. No need to manually specify URLs or create agent instances -- the agents run in-process.
+This snippet intentionally omits auth-hook implementation detail and the `requestToken.run(...)` bearer propagation wrapper; the real route is authority. Do not replace it with demo identity or browser-owned org/thread values.
 
-## Running
+**Endpoint API note:** installed `@copilotkit/runtime 1.73.3` marks `createCopilotEndpoint` as a deprecated alias of `createCopilotHonoHandler`. The current iPix route still imports the alias, so do not copy that alias into new code. Runtime cleanup should be a separate reviewed code change; this skill-sync task changes guidance only.
 
-Mastra uses its own dev server alongside Next.js:
+## Official CopilotKit reference — ADAPT, never copy wholesale
 
-```json
-{
-  "scripts": {
-    "dev": "next dev --turbopack",
-    "dev:agent": "mastra dev",
-    "dev:ui": "next dev --turbopack"
-  }
-}
+Pinned upstream baseline used for this audit:
+
+- https://github.com/CopilotKit/CopilotKit/blob/c14e2270f2dc2b63589d0e84110ef174b2853f91/examples/integrations/mastra/src/agent.ts
+  - **ADAPT** `MastraAgent.getLocalAgents(...)` as the in-process bridge.
+  - Do not copy demo package pins, auth, agent registry, or persistence choices.
+- https://github.com/CopilotKit/CopilotKit/blob/c14e2270f2dc2b63589d0e84110ef174b2853f91/showcase/shell-docs/src/content/docs/integrations/mastra/copilot-runtime.mdx
+  - **REFERENCE ONLY** for local-vs-remote integration concepts.
+  - iPix has already selected the local/in-process Product route.
+
+Refetch upstream before a future implementation; the pinned SHA is evidence for this audit, not permanent API authority.
+
+## HITL / interrupts — verified against installed `@ag-ui/mastra 1.1.4`
+
+Do **not** use the old blanket rule “Mastra interrupts are unsupported.” Installed `@ag-ui/mastra 1.1.4` handles Mastra `tool-call-suspended` events, emits a structured AG-UI interrupt outcome, and resumes through the adapter's `resumeStream()` path.
+
+Choose the mechanism by backend contract:
+
+### Native Mastra suspend → `useInterrupt`
+
+Use this when a Mastra tool deliberately suspends and the backend execution itself owns the checkpoint:
+
+```text
+Mastra tool suspend()
+→ @ag-ui/mastra `tool-call-suspended`
+→ structured AG-UI interrupt (`mastra_suspend` payload)
+→ CopilotKit useInterrupt
+→ human resolve/cancel
+→ AG-UI resume
+→ adapter resumeStream(... resumeData ...)
 ```
 
-Run `pnpm dev` to start the Next.js app (Mastra agents load in-process). Use `pnpm dev:agent` for the standalone Mastra dev server with its own UI.
+Current maintained upstream proof:
+
+- backend suspend tool: https://github.com/CopilotKit/CopilotKit/blob/c14e2270f2dc2b63589d0e84110ef174b2853f91/showcase/integrations/mastra/src/mastra/tools/interrupt.ts
+- frontend `useInterrupt`: https://github.com/CopilotKit/CopilotKit/blob/c14e2270f2dc2b63589d0e84110ef174b2853f91/showcase/integrations/mastra/src/app/demos/gen-ui-interrupt/page.tsx
+- live hook docs: https://docs.copilotkit.ai/reference/v2/hooks/useInterrupt
+
+The current CopilotKit docs contain an older conflicting Mastra page that still says interrupts are unsupported. For iPix `@ag-ui/mastra 1.1.4`, installed source/types plus the maintained upstream example above outrank that stale page.
+
+### Frontend-tool HITL → `useHumanInTheLoop`
+
+Use `useHumanInTheLoop` when the desired contract is an interactive **frontend tool** whose promise remains pending until the user responds. This is appropriate for LLM-initiated UI collection/confirmation that does not rely on a Mastra-native suspend event.
+
+Reference: https://docs.copilotkit.ai/reference/v2/hooks/useHumanInTheLoop
+
+### Durable business workflow approval
+
+For durable Brand/Shoot/Campaign workflow state, Mastra workflow `suspend()` / resume plus persisted snapshots remain the execution truth. Do not assume every workflow-step suspension is automatically surfaced through the agent-tool AG-UI interrupt bridge; verify the exact installed event path for the workflow being changed.
+
+For consequential actions, UI approval alone is never authorization:
+
+```text
+AI proposes
+→ human reviews exact artifact/revision/hash
+→ UI returns decision
+→ server revalidates actor + org + run + artifact + current domain state
+→ authorized idempotent action executes
+→ durable result is read back
+```
+
+## Security and persistence invariants
+
+- Browser `orgId`, resource IDs, thread IDs, run IDs, and model output are claims until server-authorized.
+- `resourceId` is derived by the server before creating local agents.
+- Product durability uses the guarded `PostgresStore`; local in-memory fallback must never be described as hosted durability.
+- `RequestContext` is runtime context, not authorization.
+- Exact-run Stop and stale-Stop behavior stay tenant scoped.
+- Consequential writes require human review plus server/domain revalidation.
+- Do not add another runtime, runner registry, Redis/queue, or persistence table without a proven current gap.
+
+## Development
+
+Use the repository-owned commands:
+
+```bash
+npm run dev:ui
+npm run dev:agent
+```
+
+Run them separately. Do not use a bundled demo's `pnpm dev` instructions as the iPix development contract.
