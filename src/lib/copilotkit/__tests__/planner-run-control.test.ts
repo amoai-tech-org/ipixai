@@ -42,6 +42,11 @@ function network() {
   };
   return { openBus, closed: () => closed };
 }
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 describe("PlannerRunControl", () => {
   it("probes a run owned by another runtime and relays new live events", async () => {
     const wire = network();
@@ -96,6 +101,37 @@ describe("PlannerRunControl", () => {
     expect(stopR2).not.toHaveBeenCalled();
 
     await Promise.all([handle1.close(), handle2.close()]);
+  });
+
+  it("retries connect when the owner subscribes after the first control broadcast", async () => {
+    const wire = network();
+    const owner = new PlannerRunControl(wire.openBus, { instanceId: "A", timeoutMs: 350 });
+    const controller = new PlannerRunControl(wire.openBus, { instanceId: "B", timeoutMs: 350 });
+
+    const connectionPromise = controller.connect("thread-late-connect");
+    await sleep(20);
+    const handle = await owner.own("thread-late-connect", "R1", async () => true);
+
+    expect(await connectionPromise).toMatchObject({ runId: "R1", ownerInstanceId: "A" });
+
+    await handle.close();
+  });
+
+  it("retries exact Stop when the owner subscribes after the first control broadcast", async () => {
+    const wire = network();
+    const stopLocal = vi.fn(async () => true);
+    const owner = new PlannerRunControl(wire.openBus, { instanceId: "A", timeoutMs: 350 });
+    const controller = new PlannerRunControl(wire.openBus, { instanceId: "B", timeoutMs: 350 });
+
+    const stopPromise = controller.stop("thread-late-stop", "R1");
+    await sleep(20);
+    const handle = await owner.own("thread-late-stop", "R1", stopLocal);
+
+    expect(await stopPromise).toMatchObject({ stopped: true, runId: "R1", ownerInstanceId: "A" });
+    expect(stopLocal).toHaveBeenCalledTimes(1);
+    expect(stopLocal).toHaveBeenCalledWith("R1");
+
+    await handle.close();
   });
 
   it("times out safely when no owner exists and closes the temporary bus", async () => {
