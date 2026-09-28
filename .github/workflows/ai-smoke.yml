@@ -39,3 +39,81 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       # Authenticated smoke: keep traces/reports runner-local in this public repo.
+
+  # IPI-1332 · CI-ALERT-001 — a repeatedly failing daily smoke used to fail
+  # silently. This workflow was red on both 2026-09-26 and 2026-09-27 and
+  # nothing surfaced it, because a failing AI journey is easy to dismiss as
+  # provider noise. When the previous completed scheduled run ALSO failed, open
+  # (or update) a single tracking issue so a real regression cannot hide behind
+  # "the flaky AI job".
+  #
+  # Semantics, stated precisely because "consecutive runs" is easy to overclaim:
+  # `--status=completed` returns every finished run whatever its conclusion, so
+  # cancelled and skipped runs ARE included (verified: filtering completed runs
+  # returns `cancelled` for vercel-preview and `skipped` for opencode). The alert
+  # requires the previous completed scheduled run to have concluded exactly
+  # `failure`. A cancelled or skipped predecessor is deliberately NOT treated as
+  # a failure, but it does mean there is no second failure signal, so the step
+  # says so explicitly instead of staying silent.
+  alert-on-repeat-failure:
+    needs: playwright-ai-smoke
+    # Scheduled runs only: whoever dispatches the workflow manually is already
+    # watching the result.
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - name: Open or update the tracking issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          WORKFLOW_FILE: ai-smoke.yml
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          # Conclusions of the most recent COMPLETED scheduled runs, newest
+          # first. This run is excluded because it is not complete while this
+          # job is executing. Cancelled and skipped runs are included.
+          previous="$(gh run list --repo "$REPO" --workflow="$WORKFLOW_FILE" \
+            --event=schedule --status=completed --limit 5 --json conclusion -q '[.[].conclusion] | join(",")')"
+          echo "recent completed scheduled conclusions (newest first): ${previous:-<none>}"
+
+          first="${previous%%,*}"
+          if [ "$first" = "cancelled" ] || [ "$first" = "skipped" ]; then
+            echo "::notice title=Repeated-failure alert not evaluated::the previous completed scheduled run was '${first}', which is neither a pass nor a failure, so there is no second failure signal yet. Investigate this run and the '${first}' predecessor manually."
+            exit 0
+          fi
+          if [ "$first" != "failure" ]; then
+            echo "No alert: the previous completed scheduled run was '${first:-<none>}', so this is not a repeated failure."
+            exit 0
+          fi
+
+          title="ai-smoke.yml is failing on consecutive scheduled runs"
+          {
+            echo "The scheduled \`${WORKFLOW_FILE}\` workflow has failed on at least two consecutive completed runs."
+            echo
+            echo "- latest failing run: ${RUN_URL}"
+            echo "- recent completed scheduled conclusions (newest first): \`${previous}\`"
+            echo
+            echo "This issue exists because these failures previously went unnoticed. Before treating them as provider noise:"
+            echo
+            echo "1. run \`npm run e2e:ai-smoke\` locally, or dispatch the workflow, and record which spec fails;"
+            echo "2. compare that spec against the last green run (\`gh run list --workflow=${WORKFLOW_FILE}\`);"
+            echo "3. if it is a test-robustness flake rather than a product regression, fix or quarantine the spec and say which."
+          } > /tmp/alert-body.md
+
+          existing="$(gh issue list --repo "$REPO" --state open \
+            --search "in:title \"${title}\"" --json number -q '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "Updating existing tracking issue #${existing}"
+            gh issue comment "$existing" --repo "$REPO" --body-file /tmp/alert-body.md
+          else
+            echo "Creating a new tracking issue"
+            gh issue create --repo "$REPO" --title "$title" --body-file /tmp/alert-body.md
+          fi

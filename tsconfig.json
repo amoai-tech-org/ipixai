@@ -40,6 +40,7 @@
     "playwright.agents.config.ts",
     "playwright.approval.config.ts",
     "playwright.production.config.ts",
+    "playwright.production-cert.config.ts",
     "channels.mts",
     "channel-host.mts",
     ".next/types/**/*.ts",

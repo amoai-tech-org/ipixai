@@ -1,0 +1,210 @@
+name: Production Planner Certification
+
+# IPI-1332 · CERT-PROD-001 — repeatable signed-in Production Planner
+# certification: send → Stop → new turn → stale Stop no-op → reload once, plus
+# an unexpected-5xx check on the live deployment.
+#
+# Why this exists: `playwright.config.ts` fails closed for any non-local,
+# non-preview target, and `playwright.production.config.ts` matches only the
+# non-destructive `production-smoke.spec.ts`, which never touches the Planner.
+# IPI-1332 Step 6.3 requires the signed-in Production Planner journey and
+# IPI-1329's CP7 ran it ad-hoc from a laptop. This makes that proof repeatable.
+#
+# Side effects, stated plainly: this drives the real hosted Planner with the
+# dedicated QA account, so it makes real paid model calls and persists one
+# Planner thread for that account. It creates no accounts, organizations,
+# memberships, brands, shoots or payments, and never writes to a hosted brand.
+# Production is released deliberately in this repository, so certification is a
+# deliberate, confirmed act too — hence the exact confirmation phrase.
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact 40-character Git SHA that Production must already be serving
+        required: true
+        type: string
+      confirm:
+        description: Type certify-production to acknowledge real paid model calls and one persisted QA Planner thread
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Certification mutates shared Production QA state; never run two at once.
+concurrency:
+  group: production-planner-cert
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate the request
+        id: request
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::expected_sha must be an exact 40-character Git SHA" >&2
+            exit 1
+          fi
+          if [ "$CONFIRM" != "certify-production" ]; then
+            echo "::error::type the exact confirmation phrase 'certify-production' in the confirm input" >&2
+            exit 1
+          fi
+          # Vercel reports `githubCommitSha` in lowercase. Normalize once here and
+          # use this value for the checkout and every comparison, so a correct SHA
+          # typed in uppercase is not rejected as a different commit.
+          echo "expected_sha=$(printf '%s' "$EXPECTED_SHA" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      # Certify the deployed artifact with the code that shipped in it, not with
+      # whatever `main` has since become: checking out `main` would run newer
+      # specs against an older deployment, so a green run would not prove the
+      # requested SHA passes. Safe to use this input as a ref because the step
+      # above validated it as a 40-character SHA, and only users with write
+      # access can dispatch this workflow.
+      - name: Checkout the certified SHA
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ steps.request.outputs.expected_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Use repository Node version
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # CKV_GHA_7: the SHA is human-supplied. Prove it is a commit this repository
+      # actually released (an ancestor of main) rather than an arbitrary object,
+      # which is the strongest check available without trusting the input.
+      - name: Assert the SHA is a released commit on main
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ steps.request.outputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$EXPECTED_SHA" origin/main; then
+            echo "::error::${EXPECTED_SHA} is not an ancestor of origin/main, so it is not a released iPix commit" >&2
+            exit 1
+          fi
+          echo "OK: ${EXPECTED_SHA} is in main's history."
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.23.1
+
+      # IPI-1332 Step 6.2 — never certify "whatever is live". Prove the live
+      # Production deployment is the requested commit before spending paid model
+      # calls, and prove the public alias actually resolves to that deployment.
+      - name: Assert Production serves the expected SHA
+        id: prod
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # Identify the project by ID, not by its display name. A hardcoded
+          # `vercel ls ipixai` depends on the project name (and its casing) never
+          # changing or gaining an org prefix, and `ci.yml`'s release job already
+          # identifies this project by VERCEL_PROJECT_ID / VERCEL_ORG_ID. Verified
+          # that `vercel ls <projectId>` resolves the same production deployments.
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          EXPECTED_SHA: ${{ steps.request.outputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_PROJECT_ID:-}" ]; then
+            echo "::error::VERCEL_PROJECT_ID is not configured for this repository" >&2
+            exit 1
+          fi
+          vercel ls "$VERCEL_PROJECT_ID" --prod --json --token="$VERCEL_TOKEN" > /tmp/prod.json
+          vercel inspect https://www.ipix.co --json --token="$VERCEL_TOKEN" > /tmp/alias.json
+
+          node -e '
+            const fs = require("fs");
+            const expected = process.env.EXPECTED_SHA;
+            const list = JSON.parse(fs.readFileSync("/tmp/prod.json", "utf8"));
+            const alias = JSON.parse(fs.readFileSync("/tmp/alias.json", "utf8"));
+            const deployments = (list.deployments || list).filter((d) => d.target === "production");
+            if (deployments.length === 0) {
+              throw new Error(
+                `no production deployment found for project ${process.env.VERCEL_PROJECT_ID}`,
+              );
+            }
+            const newest = deployments[0];
+            const sha = (newest.meta || {}).githubCommitSha;
+            if (sha !== expected) {
+              throw new Error(`Production serves ${sha ?? "<no git metadata>"} but expected ${expected}`);
+            }
+            if (alias.url !== newest.url) {
+              throw new Error(`www.ipix.co resolves to ${alias.url}, not the newest production deployment ${newest.url}`);
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `deployment_url=${newest.url}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `deployment_sha=${sha}\n`);
+            console.log(`Production OK: www.ipix.co -> ${newest.url} @ ${sha}`);
+          '
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
+
+      - name: Run the signed-in Production Planner certification
+        env:
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          COPILOTKIT_TELEMETRY_DISABLED: "true"
+        run: |
+          set -euo pipefail
+          # The spec asserts the whole journey itself, ending with
+          # `expect(problems).toEqual([])` — no console errors, no uncaught page
+          # errors, no 5xx — so a green run is the browser-side proof.
+          npm run e2e:production-cert
+
+      # The browser collector only sees responses the page received. This is the
+      # independent, provider-side check for the same window, matching
+      # IPI-1329's CP7 evidence.
+      - name: Assert no unexpected /api/copilotkit 5xx on the live deployment
+        if: always() && steps.prod.outputs.deployment_url != ''
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.prod.outputs.deployment_url }}
+          PROD_LOG_FILE: /tmp/prod-logs.jsonl
+        run: |
+          set -euo pipefail
+          # Fail closed, and do NOT discard the query result. The previous version
+          # piped this through `|| true`, so a failed or unauthorized log request
+          # produced an empty file, the parser found zero errors in it, and the
+          # step passed without verifying anything.
+          #
+          # `vercel logs` defaults to 100 result lines, which truncates the
+          # certification window (measured: exactly 100 lines returned for a
+          # single journey). Raise the limit well past the journey's volume so the
+          # window cannot rotate out from under the check.
+          vercel logs "$DEPLOYMENT_URL" --json --limit 5000 --token="$VERCEL_TOKEN" > "$PROD_LOG_FILE"
+          node scripts/check-planner-production-logs.mjs
+
+      - name: Certification summary
+        if: always()
+        run: |
+          {
+            echo "### Production Planner certification"
+            echo ""
+            echo "| Field | Value |"
+            echo "| -- | -- |"
+            echo "| Requested SHA | \`${{ steps.request.outputs.expected_sha }}\` |"
+            echo "| Deployment | \`${{ steps.prod.outputs.deployment_url }}\` |"
+            echo "| Deployed SHA | \`${{ steps.prod.outputs.deployment_sha }}\` |"
+            echo "| Run | ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
