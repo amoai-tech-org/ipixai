@@ -19,6 +19,7 @@ import { E2E_WEBSERVER_MARKER, plannerSeedRoutesEnabled } from "../src/lib/plann
 
 
 type WorkflowStep = {
+  name?: string;
   run?: string;
   uses?: string;
   env?: Record<string, unknown>;
@@ -138,6 +139,7 @@ describe("Playwright E2E harness hardening", () => {
       path.resolve(process.cwd(), ".github/workflows/vercel-preview.yml"),
       "utf8",
     );
+    const workflow = (parse(source) ?? {}) as { env?: Record<string, string> };
     const job = workflowJob(source, "deploy");
     const journey = (job.steps ?? []).find((step) =>
       step.run?.includes("npx playwright test"),
@@ -149,12 +151,55 @@ describe("Playwright E2E harness hardening", () => {
     expect(journey?.env?.VERCEL_AUTOMATION_BYPASS_SECRET).toContain(
       "secrets.VERCEL_AUTOMATION_BYPASS_SECRET",
     );
-    expect(journey?.run).toContain("e2e/planner-stop-journey.spec.ts");
-    expect(journey?.run).toContain("e2e/planner-journey.spec.ts");
+
+    // IPI-1332 · CERT-INTEGRITY-001 — the certified spec list is declared once
+    // at workflow level and the run step consumes it, so assert the EFFECTIVE
+    // list rather than one step's literal text: a check on the literal text can
+    // pass while the workflow actually runs something else.
+    const certified = String(workflow.env?.CERT_SPECS ?? "");
+    for (const spec of [
+      "e2e/planner-stop-journey.spec.ts",
+      "e2e/planner-journey.spec.ts",
+      "e2e/planner-thread-isolation.spec.ts",
+    ]) {
+      expect(certified, `CERT_SPECS must declare ${spec}`).toContain(spec);
+    }
+    // The run step must consume the declared list rather than keep its own copy.
+    expect(journey?.run).toContain("$CERT_SPECS");
+
     // It must not silently widen to the writing brand-intelligence journey.
     // Assert on the spec path, not the bare name, so the workflow's own
     // explanatory comment cannot satisfy or break this check.
+    expect(certified).not.toContain("brand-intelligence-journey.spec.ts");
     expect(journey?.run).not.toContain("brand-intelligence-journey.spec.ts");
+  });
+
+  // IPI-1332 · CERT-INTEGRITY-001 regression — a workflow_dispatch runs the
+  // workflow file from the dispatch REF, not from the candidate SHA, so
+  // certifying a PR-branch SHA while dispatching `--ref main` silently ran
+  // main's spec list. On 2026-09-27 that recorded `planner-workflows.spec.ts`
+  // as Preview-verified without it ever executing. This locks the guard in.
+  it("proves the exact-SHA Preview cert runs the candidate SHA's workflow, not the dispatch ref's", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), ".github/workflows/vercel-preview.yml"),
+      "utf8",
+    );
+    const job = workflowJob(source, "deploy");
+    const guard = (job.steps ?? []).find((step) =>
+      step.name?.includes("Assert the running workflow matches the candidate SHA"),
+    );
+    expect(
+      guard,
+      "the Preview cert must assert it is running the candidate SHA's workflow",
+    ).toBeDefined();
+    // It must compare the candidate SHA's declared list against the RUNNING
+    // file's, which comes from the dispatch ref.
+    expect(guard?.env?.CANDIDATE_SHA).toContain("inputs.sha");
+    expect(guard?.env?.RUNNING_REF_SHA).toContain("github.sha");
+    expect(guard?.run).toContain("CANDIDATE_SHA");
+    expect(guard?.run).toContain("RUNNING_REF_SHA");
+    // …and fail closed rather than warn and continue with the wrong list.
+    expect(guard?.run).toContain("exit 1");
   });
 
   it("reports a clear Supabase Auth timeout instead of a raw Playwright TimeoutError", async () => {
