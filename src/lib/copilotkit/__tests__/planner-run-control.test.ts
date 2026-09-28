@@ -67,6 +67,44 @@ describe("PlannerRunControl", () => {
     await handle.close();
   });
 
+  it("replays active-run events emitted before remote connect, then continues live", async () => {
+    const wire = network();
+    const owner = new PlannerRunControl(wire.openBus, { instanceId: "A", timeoutMs: 100 });
+    const controller = new PlannerRunControl(wire.openBus, { instanceId: "B", timeoutMs: 100 });
+    const handle = await owner.own("thread-replay", "R1", async () => true);
+
+    await handle.publish({
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: "m-replay",
+      role: "assistant",
+    } as BaseEvent);
+    await handle.publish({
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "m-replay",
+      delta: "before-connect",
+    } as BaseEvent);
+
+    const connection = await controller.connect("thread-replay");
+    expect(connection).toMatchObject({ runId: "R1", ownerInstanceId: "A" });
+    const received: BaseEvent[] = [];
+    connection?.onEvent((event) => received.push(event));
+
+    expect(received.map((event) => event.type)).toEqual([
+      EventType.TEXT_MESSAGE_START,
+      EventType.TEXT_MESSAGE_CONTENT,
+    ]);
+
+    await handle.publish({
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "m-replay",
+      delta: "after-connect",
+    } as BaseEvent);
+    expect(received).toHaveLength(3);
+
+    await connection?.close();
+    await handle.close();
+  });
+
   it("stops only the exact remote run and fences stale Stop(R1)", async () => {
     const wire = network();
     const stopLocal = vi.fn(async (runId: string) => runId === "R2");
