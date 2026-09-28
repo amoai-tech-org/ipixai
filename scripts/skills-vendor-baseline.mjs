@@ -83,7 +83,7 @@ function isIpixOverlay(front) {
   return /-ipix\./i.test(frontValue(front, "version"));
 }
 
-/** Deterministic hash of a directory tree: sorted `relpath\0base64(bytes)`. */
+/** Deterministic hash of a directory tree: sorted `relpath\0base64(bytes)`, newline-joined. */
 export function hashTree(dir) {
   const entries = [];
   const walk = (current) => {
@@ -93,12 +93,29 @@ export function hashTree(dir) {
         walk(full);
       } else {
         const rel = relative(dir, full).split(sep).join("/");
-        entries.push(`${rel}\u0000${readFileSync(full).toString("base64")}`);
+        entries.push({ rel, bytes: readFileSync(full) });
       }
     }
   };
   walk(dir);
-  return createHash("sha256").update(entries.join("\n")).digest("hex");
+
+  // Feed the digest incrementally instead of joining every entry into one string
+  // first. The previous form held a second, base64-inflated copy of the whole tree
+  // in memory and was bounded by V8's maximum string length; this form is bounded
+  // by the largest single file. The byte stream is identical — `relpath\0`,
+  // then `base64(bytes)`, entries joined with newlines — so existing hashes do not
+  // move, which the check against the committed baseline confirms.
+  //
+  // Base64 is kept deliberately: switching to raw buffers would change every hash
+  // for no functional gain, and the memory concern was the whole-tree string
+  // rather than the per-file encoding.
+  const hash = createHash("sha256");
+  entries.forEach(({ rel, bytes }, index) => {
+    if (index > 0) hash.update("\n");
+    hash.update(`${rel}\u0000`);
+    hash.update(bytes.toString("base64"));
+  });
+  return hash.digest("hex");
 }
 
 /**

@@ -31,12 +31,28 @@ import { discoverVendoredRoots } from "./skills-vendor-baseline.mjs";
 const SKILL_ROOTS = [".claude/skills", ".agents/skills"];
 const SKIP_PATH_SEGMENTS = ["node_modules"];
 
-/** GitHub's heading slug: lowercase, strip punctuation (keep `-`/`_`), spaces to `-`. */
+/**
+ * GitHub's heading slug: lowercase, strip punctuation (keep the literal space,
+ * `-` and `_`), then spaces to `-`.
+ *
+ * Two details are deliberate, and both were wrong before:
+ *
+ *  - The character class lists a **literal space** rather than `\s`.
+ *    `github-slugger` *removes* every other whitespace character — a tab, a
+ *    newline, a non-breaking space — and only ever turns a literal space into
+ *    `-`. A `\s` class preserved them, producing `a\tb` where GitHub produces
+ *    `ab`.
+ *  - There is **no `trim()`**. `github-slugger` does not trim, so `" a"` becomes
+ *    `"-a"`. Trimming looked harmless because `markdownHeadings` already strips
+ *    surrounding whitespace, which is exactly why the original 16,046-heading
+ *    comparison reported zero mismatches while both defects were present: no real
+ *    heading exercises either path. Synthetic vectors are the only thing that
+ *    catches them, which is why the conformance vectors below include whitespace.
+ */
 export function githubSlug(heading) {
   return heading
-    .trim()
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\p{M}\s_-]/gu, "")
+    .replace(/[^\p{L}\p{N}\p{M} _-]/gu, "")
     .replace(/ /g, "-");
 }
 
@@ -106,14 +122,19 @@ export function linesOutsideFences(text) {
   return outside;
 }
 
-/** Heading texts (H1–H6) outside fenced code blocks. */
-export function markdownHeadings(text) {
+/** Heading texts (H1–H6) drawn from lines that are already known to be unfenced. */
+function headingsFromLines(lines) {
   const headings = [];
-  for (const { text: line } of linesOutsideFences(text)) {
+  for (const { text: line } of lines) {
     const match = line.match(/^#{1,6}\s+(.*?)\s*$/);
     if (match) headings.push(match[1]);
   }
   return headings;
+}
+
+/** Heading texts (H1–H6) outside fenced code blocks. */
+export function markdownHeadings(text) {
+  return headingsFromLines(linesOutsideFences(text));
 }
 
 function declaresExternalSource(text) {
@@ -187,8 +208,11 @@ export function findBrokenAnchors(repoRoot) {
         continue;
       }
       scanned += 1;
-      const valid = headingSlugSet(markdownHeadings(text));
-      for (const { number, text: line } of linesOutsideFences(text)) {
+      // Classify the file's fences once and use the result for both headings and
+      // links; calling `linesOutsideFences` twice per file did the same split twice.
+      const outside = linesOutsideFences(text);
+      const valid = headingSlugSet(headingsFromLines(outside));
+      for (const { number, text: line } of outside) {
         for (const anchor of sameFileAnchors(line)) {
           if (!valid.has(anchor)) broken.push({ file: rel, line: number, anchor });
         }

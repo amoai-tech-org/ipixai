@@ -237,11 +237,28 @@ describe("every SKILL.md is discoverable through valid frontmatter", () => {
     ).toEqual([]);
   });
 
-  it("the explicit name check is equivalent to the spec's regex", () => {
-    // The regex appears here only as an oracle for the corpus; the shipped check
-    // is `isValidSkillName`, which has no nested quantifier. If these ever
-    // disagree, the explicit form has silently changed the spec.
-    const ORACLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  it("the explicit name check is equivalent to an independent oracle", () => {
+    // A deliberately different decomposition from the shipped `isValidSkillName`.
+    // The shipped check validates characters and rejects leading, trailing and
+    // doubled hyphens; this one splits on hyphens and validates the segments. Two
+    // different algorithms have to be wrong the same way to agree falsely, which
+    // is the point of having a second one at all.
+    //
+    // It is not the spec's literal `/^[a-z0-9]+(?:-[a-z0-9]+)*$/: that nested
+    // quantifier trips a static ReDoS heuristic on every run. The pattern is in
+    // fact linear — the classes are disjoint, so there is no ambiguity to
+    // backtrack into — but the segment form states the same rule without being
+    // mistakable for a risk, and losing nothing is better than winning an argument.
+    const specOracle = (name: string): boolean =>
+      name.length > 0 &&
+      name.split("-").every(
+        (segment) =>
+          segment.length > 0 &&
+          [...segment].every(
+            (character) =>
+              (character >= "a" && character <= "z") || (character >= "0" && character <= "9"),
+          ),
+      );
     const alphabet = ["a", "z", "0", "9", "-", "A", "_"];
     const candidates = [
       "",
@@ -276,7 +293,7 @@ describe("every SKILL.md is discoverable through valid frontmatter", () => {
       ...Array.from({ length: 5 }, (_, length) => everyString(alphabet, length)).flat(),
     ];
     const disagreements = candidates.filter(
-      (candidate) => isValidSkillName(candidate) !== ORACLE.test(candidate),
+      (candidate) => isValidSkillName(candidate) !== specOracle(candidate),
     );
     expect(
       disagreements,

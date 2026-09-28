@@ -48,6 +48,16 @@ describe("GitHub heading slugs", () => {
     ["GitHub — curated top repos", "github--curated-top-repos"],
     ["Mastra — doc & link index", "mastra--doc--link-index"],
     ["Saving Google tokens", "saving-google-tokens"],
+    // Whitespace vectors, expected values from `github-slugger`. Only a literal
+    // space becomes a hyphen; every other whitespace character is *removed*, and
+    // nothing is trimmed. No heading in this repository contains a tab, newline
+    // or non-breaking space, which is why comparing 16,046 real headings reported
+    // zero mismatches while both defects were live.
+    ["A\tB", "ab"],
+    ["Tabs\tand  spaces", "tabsand--spaces"],
+    ["Mix\t of  both", "mix-of--both"],
+    ["A\u00a0B", "ab"],
+    ["", ""],
   ])("slugs %j as %j", (heading, expected) => {
     expect(githubSlug(heading)).toBe(expected);
   });
