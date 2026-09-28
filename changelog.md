@@ -20,6 +20,7 @@ All notable verified changes to iPix are recorded here. This file follows [Keep 
 
 ### Fixed
 
+- IPI-1117 · HOST-RUNNER-001 — Added tenant-authorized private Supabase Realtime coordination for active Planner runs so a request handled by one Vercel process can be discovered, reconnected to, and stopped from another process with exact `runId` fencing; stale Stop requests cannot cancel a newer run.
 - `docs/mastra/runtime-family.md` — corrected the pinned Mastra/CopilotKit family table, which still listed the pre-IPI-1332 versions (`@copilotkit/runtime` 1.68.1, `@mastra/core` 1.63.2, `@mastra/pg` 1.22.2) rather than the installed 1.73.3 / 1.71.0 / 1.27.1.
 
 ### Security
