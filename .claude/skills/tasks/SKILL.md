@@ -105,7 +105,7 @@ After a PR merges, complete the applicable post-merge proof in [post-merge.md](r
 
 At the Done gate, explicitly decide whether the change requires durable docs and/or a changelog entry:
 
-- behavior, architecture, contracts, runbooks, governance/policy, or user journeys changed → update the canonical `docs/**` in the same PR; GitBook publishes after merge;
+- behavior, architecture, contracts, runbooks, governance/policy, or user journeys changed → update the canonical `docs/**` in the same PR, **except when the change’s canonical source is this task standard itself** (duplicating a rule here into `docs/**` would breach BEST-PRACTICES.md’s no-duplicate-truth rule); GitBook publishes after merge;
 - notable shipped product, security, reliability, operational or governance/policy change → update `changelog.md` **in the same PR**. The entry is part of the change, not a follow-up: merging a contract change without it leaves `main` describing a state that never existed. The post-merge pass is the fallback for a genuine miss, never the plan;
 - neither applies → record the reason briefly in the task/PR.
 

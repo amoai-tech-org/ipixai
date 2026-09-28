@@ -179,10 +179,17 @@ describe("iPix engineering skill contracts", () => {
   });
 
   test("pre-merge guidance requires running contract tests after editing a file they read", () => {
-    const sectionStart = preMergeTests.indexOf("## Documentation files are under test");
-    expect(sectionStart, "the section must exist as its own heading").toBeGreaterThanOrEqual(0);
+    // Match the headings as complete lines so a passing mention in prose cannot
+    // satisfy the anchor, and prove the closing boundary exists BEFORE slicing:
+    // `indexOf` returning -1 would slice to the end of the file and let every
+    // assertion below pass against unrelated content.
+    const sectionStart = preMergeTests.search(/^## Documentation files are under test$/m);
+    const sectionEnd = preMergeTests.search(/^## iPix path\/risk matrix$/m);
 
-    const section = preMergeTests.slice(sectionStart, preMergeTests.indexOf("## iPix path/risk matrix"));
+    expect(sectionStart, "the section must exist as its own heading").toBeGreaterThanOrEqual(0);
+    expect(sectionEnd, "the closing heading must exist after it").toBeGreaterThan(sectionStart);
+
+    const section = preMergeTests.slice(sectionStart, sectionEnd);
     expect(section).toMatch(/run the contract test \*\*after\*\* the edit/);
     expect(section).toContain("npm run test:skills");
     expect(section).toMatch(/pin the \*\*structure\*\*/);
