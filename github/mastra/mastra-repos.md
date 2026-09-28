@@ -4,7 +4,7 @@ Local clones: `github/mastra/clones/` (gitignored). Do not commit nested git rep
 
 These contain runnable source and setup instructions. **Not executed here with real credentials.** Treat community starters as **patterns only** — never copy their Mastra versions or migrations into iPixai.
 
-iPixai today: CopilotKit `1.68.1`, `@mastra/core` `1.41.0`, `@mastra/libsql` (PostgresStore / `@mastra/pg@1.13.0` is the **planned** pin in `docs/reference/mastra-supabase-lessons.md`, not an installed dependency yet). Inspect published `@mastra/pg@1.13.0`, not only `mastra-ai/mastra` `main`.
+iPixai's installed family is recorded in [`docs/mastra/runtime-family.md`](../../docs/mastra/runtime-family.md) — do not restate a version here; a second copy is how the two drift apart. Inspect the published packages at those pinned versions, not only `mastra-ai/mastra` `main`.
 
 ## Top 5 to clone and examine first
 
