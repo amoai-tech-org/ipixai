@@ -24,6 +24,7 @@ comment on function planner.can_use_run_channel(text) is
 
 revoke all on function planner.can_use_run_channel(text) from public, anon, authenticated;
 grant execute on function planner.can_use_run_channel(text) to authenticated, service_role;
+
 drop policy if exists "planner_run_channel_subscribe" on realtime.messages;
 create policy "planner_run_channel_subscribe"
 on realtime.messages
@@ -31,7 +32,6 @@ for select
 to authenticated
 using (
   realtime.messages.extension = 'broadcast'
-  and realtime.topic() like 'planner-run:%'
   and planner.can_use_run_channel(realtime.topic())
 );
 
@@ -42,6 +42,5 @@ for insert
 to authenticated
 with check (
   realtime.messages.extension = 'broadcast'
-  and realtime.topic() like 'planner-run:%'
   and planner.can_use_run_channel(realtime.topic())
 );
