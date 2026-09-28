@@ -179,9 +179,11 @@ describe("iPix engineering skill contracts", () => {
     expect(changelog).toContain("notable verified");
     expect(changelog).toContain("IPI-1294");
     expect(changelog).toContain("four-template routing");
-    expect(todo).toContain("full canonical external-reference contract");
-    expect(todo).toContain("Live template inventory is exactly four");
-    expect(todo).toContain("Linear Reviews/Diffs does not currently discover `amoai-tech/ipixai`");
+    // Retired with the post-merge records: these pinned transient handoff text
+    // ("full canonical external-reference contract", "Live template inventory is
+    // exactly four", the Linear Reviews/Diffs discovery blocker) that described
+    // a superseded state of IPI-1294. The durable history lives in changelog.md
+    // and Linear; todo.md is a short current handoff and must be free to move on.
     expect(todo).not.toContain("synchronize/retire live Linear template definitions");
   });
 
