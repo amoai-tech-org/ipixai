@@ -6,6 +6,9 @@ function readRepoFile(path: string) {
   return readFileSync(join(process.cwd(), path), "utf8");
 }
 
+/** The real Planner route — the authority the documented snippet must mirror. */
+const ROUTE_HANDLERS_FILE = "src/app/api/copilotkit/[[...slug]]/route.ts";
+
 function readMarkdownTree(path: string): Array<{ path: string; content: string }> {
   const root = join(process.cwd(), path);
   const results: Array<{ path: string; content: string }> = [];
@@ -330,9 +333,26 @@ describe("iPix engineering skill contracts", () => {
     // A route snippet that builds `app` but exports no handlers describes a
     // route that exists and never runs. The exports and the Vercel adapter are
     // part of the contract, not boilerplate.
+    //
+    // The expected set is derived from the real route rather than hand-pinned.
+    // Pinning only `GET` and `POST` left `PATCH` and `DELETE` unprotected:
+    // deleting either from the snippet kept this guard green (verified), which is
+    // the same "exists and never runs" defect it was added to prevent — for those
+    // methods. Deriving the set keeps the snippet and the route in step.
     expect(integration).toContain('from "hono/vercel"');
-    expect(integration).toMatch(/export const GET = handler/);
-    expect(integration).toMatch(/export const POST = handler/);
+    const routeHandlers = [
+      ...readRepoFile(ROUTE_HANDLERS_FILE).matchAll(/^export const ([A-Z]+) = /gm),
+    ]
+      .map((match) => match[1])
+      .sort();
+    const documentedHandlers = [...integration.matchAll(/^export const ([A-Z]+) = handler;/gm)]
+      .map((match) => match[1])
+      .sort();
+    expect(
+      routeHandlers.length,
+      `${ROUTE_HANDLERS_FILE} exports no handlers, so this contract would be vacuous.`,
+    ).toBeGreaterThan(1);
+    expect(documentedHandlers).toEqual(routeHandlers);
     expect(integration).not.toContain("Current audited iPix family (2026-09-04)");
     expect(integration).not.toContain("InMemoryAgentRunner");
     expect(integration).not.toContain("LibSQLStore");
