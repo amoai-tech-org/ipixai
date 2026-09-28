@@ -61,6 +61,7 @@ The Product route deliberately does **not** select hosted CopilotKit Intelligenc
 
 ```ts
 import { CopilotRuntime, createCopilotHonoHandler } from "@copilotkit/runtime/v2";
+import { handle } from "hono/vercel";
 import { createLocalAgents } from "@/agent";
 import { requirePlannerResourceId } from "@/lib/auth/planner-session";
 import { TenantAbortRunner, attachRunnerAbort } from "@/lib/copilotkit/tenant-abort-runner";
@@ -80,9 +81,19 @@ const app = createCopilotHonoHandler({
   basePath: "/api/copilotkit",
   // real iPix route also supplies tenant-scoped hooks.
 });
+
+// Export the App Router handlers. Building `app` alone produces a route that
+// exists but never runs, so these exports are part of the contract, not
+// boilerplate. iPix uses the Vercel adapter — `handle(app)` from `hono/vercel`;
+// `app.fetch` is the Hono-native form and is not what this route uses.
+const handler = handle(app);
+export const GET = handler;
+export const POST = handler;
+export const PATCH = handler;
+export const DELETE = handler;
 ```
 
-This snippet intentionally omits auth-hook implementation detail; the real route is authority. Do not replace it with demo identity or browser-owned org/thread values.
+This snippet intentionally omits auth-hook implementation detail and the `requestToken.run(...)` bearer propagation wrapper; the real route is authority. Do not replace it with demo identity or browser-owned org/thread values.
 
 **Endpoint API note:** installed `@copilotkit/runtime 1.73.3` marks `createCopilotEndpoint` as a deprecated alias of `createCopilotHonoHandler`. The current iPix route still imports the alias, so do not copy that alias into new code. Runtime cleanup should be a separate reviewed code change; this skill-sync task changes guidance only.
 

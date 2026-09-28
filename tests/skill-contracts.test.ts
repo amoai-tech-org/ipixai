@@ -327,6 +327,12 @@ describe("iPix engineering skill contracts", () => {
     expect(integration).toContain("MASTRA_DATABASE_URL");
     expect(integration).toContain("createCopilotHonoHandler");
     expect(integration).toMatch(/`createCopilotEndpoint`[^\n]*deprecated alias/);
+    // A route snippet that builds `app` but exports no handlers describes a
+    // route that exists and never runs. The exports and the Vercel adapter are
+    // part of the contract, not boilerplate.
+    expect(integration).toContain('from "hono/vercel"');
+    expect(integration).toMatch(/export const GET = handler/);
+    expect(integration).toMatch(/export const POST = handler/);
     expect(integration).not.toContain("Current audited iPix family (2026-09-04)");
     expect(integration).not.toContain("InMemoryAgentRunner");
     expect(integration).not.toContain("LibSQLStore");
