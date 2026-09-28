@@ -25,6 +25,12 @@
       "skillPath": "skills/improve-test-cases/SKILL.md",
       "computedHash": "3da59e9eb9bc93671f43fa71a553d1b5ba9e0648573ee56c47c538736138b113"
     },
+    "ponytail": {
+      "source": "DietrichGebert/ponytail",
+      "sourceType": "github",
+      "skillPath": "skills/ponytail/SKILL.md",
+      "computedHash": "1316a2f3f95741d2300b116fe0c2d81ce4a9568656ed0a62643f54aaf09957f2"
+    },
     "prima": {
       "source": "testomatio/skills",
       "sourceType": "github",

@@ -244,6 +244,29 @@
         "deterministic browser automation"
       ]
     },
+    "ponytail": {
+      "owner": "engineering",
+      "type": "workflow",
+      "summary": "Write the smallest change that fully works by climbing the lazy-senior-dev ladder before adding code.",
+      "modes": [
+        "general",
+        "code-review"
+      ],
+      "delegates_to": [],
+      "do_not_use_for": [
+        "replacing task or domain skills",
+        "skipping validation, security, or required evidence"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/ponytail",
+      "routing_phrases": [
+        "smallest change that works",
+        "avoid over-engineering",
+        "am i over-engineering",
+        "do we really need this",
+        "simplest solution that works"
+      ]
+    },
     "prima": {
       "owner": "qa-browser",
       "type": "workflow",
