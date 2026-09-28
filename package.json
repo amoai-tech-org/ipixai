@@ -30,6 +30,7 @@
     "e2e:debug": "PLAYWRIGHT_BROWSERS_PATH=0 playwright test --project=chromium --project=mobile-chromium --debug",
     "e2e:report": "PLAYWRIGHT_BROWSERS_PATH=0 playwright show-report",
     "e2e:production": "E2E_PRODUCTION_SMOKE=1 PLAYWRIGHT_BROWSERS_PATH=0 playwright test --config=playwright.production.config.ts",
+    "e2e:production-cert": "E2E_PRODUCTION_CERT=1 PLAYWRIGHT_BROWSERS_PATH=0 playwright test --config=playwright.production-cert.config.ts",
     "e2e:approval": "PLAYWRIGHT_BROWSERS_PATH=0 node scripts/run-approval-001-e2e.mjs",
     "dev:e2e": "node scripts/dev-guard.mjs --port 3015 -- next dev --turbopack -p 3015",
     "start:e2e": "node scripts/dev-guard.mjs --port 3015 -- next start -p 3015",

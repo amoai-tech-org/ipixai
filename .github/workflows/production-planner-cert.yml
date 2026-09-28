@@ -1,0 +1,177 @@
+name: Production Planner Certification
+
+# IPI-1332 · CERT-PROD-001 — repeatable signed-in Production Planner
+# certification: send → Stop → new turn → stale Stop no-op → reload once, plus
+# an unexpected-5xx check on the live deployment.
+#
+# Why this exists: `playwright.config.ts` fails closed for any non-local,
+# non-preview target, and `playwright.production.config.ts` matches only the
+# non-destructive `production-smoke.spec.ts`, which never touches the Planner.
+# IPI-1332 Step 6.3 requires the signed-in Production Planner journey and
+# IPI-1329's CP7 ran it ad-hoc from a laptop. This makes that proof repeatable.
+#
+# Side effects, stated plainly: this drives the real hosted Planner with the
+# dedicated QA account, so it makes real paid model calls and persists one
+# Planner thread for that account. It creates no accounts, organizations,
+# memberships, brands, shoots or payments, and never writes to a hosted brand.
+# Production is released deliberately in this repository, so certification is a
+# deliberate, confirmed act too — hence the exact confirmation phrase.
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact 40-character Git SHA that Production must already be serving
+        required: true
+        type: string
+      confirm:
+        description: Type certify-production to acknowledge real paid model calls and one persisted QA Planner thread
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Certification mutates shared Production QA state; never run two at once.
+concurrency:
+  group: production-planner-cert
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate the request
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::expected_sha must be an exact 40-character Git SHA" >&2
+            exit 1
+          fi
+          if [ "$CONFIRM" != "certify-production" ]; then
+            echo "::error::type the exact confirmation phrase 'certify-production' in the confirm input" >&2
+            exit 1
+          fi
+
+      - name: Checkout current main
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Use repository Node version
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.23.1
+
+      # IPI-1332 Step 6.2 — never certify "whatever is live". Prove the live
+      # Production deployment is the requested commit before spending paid model
+      # calls, and prove the public alias actually resolves to that deployment.
+      - name: Assert Production serves the expected SHA
+        id: prod
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          vercel ls ipixai --prod --json --token="$VERCEL_TOKEN" > /tmp/prod.json
+          vercel inspect https://www.ipix.co --json --token="$VERCEL_TOKEN" > /tmp/alias.json
+
+          node -e '
+            const fs = require("fs");
+            const expected = process.env.EXPECTED_SHA;
+            const list = JSON.parse(fs.readFileSync("/tmp/prod.json", "utf8"));
+            const alias = JSON.parse(fs.readFileSync("/tmp/alias.json", "utf8"));
+            const deployments = (list.deployments || list).filter((d) => d.target === "production");
+            if (deployments.length === 0) throw new Error("no production deployment found");
+            const newest = deployments[0];
+            const sha = (newest.meta || {}).githubCommitSha;
+            if (sha !== expected) {
+              throw new Error(`Production serves ${sha ?? "<no git metadata>"} but expected ${expected}`);
+            }
+            if (alias.url !== newest.url) {
+              throw new Error(`www.ipix.co resolves to ${alias.url}, not the newest production deployment ${newest.url}`);
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `deployment_url=${newest.url}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `deployment_sha=${sha}\n`);
+            console.log(`Production OK: www.ipix.co -> ${newest.url} @ ${sha}`);
+          '
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
+
+      - name: Run the signed-in Production Planner certification
+        env:
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          COPILOTKIT_TELEMETRY_DISABLED: "true"
+        run: |
+          set -euo pipefail
+          # The spec asserts the whole journey itself, ending with
+          # `expect(problems).toEqual([])` — no console errors, no uncaught page
+          # errors, no 5xx — so a green run is the browser-side proof.
+          npm run e2e:production-cert
+
+      # The browser collector only sees responses the page received. This is the
+      # independent, provider-side check for the same window, matching
+      # IPI-1329's CP7 evidence.
+      - name: Assert no unexpected /api/copilotkit 5xx on the live deployment
+        if: always() && steps.prod.outputs.deployment_url != ''
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.prod.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          vercel logs "$DEPLOYMENT_URL" --json --token="$VERCEL_TOKEN" > /tmp/prod-logs.jsonl || true
+          node -e '
+            const fs = require("fs");
+            const lines = fs.readFileSync("/tmp/prod-logs.jsonl", "utf8").split("\n").filter(Boolean);
+            const copilotkit = [];
+            const bad = [];
+            for (const line of lines) {
+              let entry;
+              try { entry = JSON.parse(line); } catch { continue; }
+              const text = JSON.stringify(entry);
+              const status = entry.statusCode ?? (entry.proxy && entry.proxy.statusCode);
+              const path = (entry.proxy && entry.proxy.path) || entry.path || "";
+              if (status >= 500) bad.push(`${status} ${path}`);
+              if (/\/api\/copilotkit/.test(text) && status >= 500) copilotkit.push(`${status} ${path}`);
+            }
+            console.log(`scanned ${lines.length} log line(s); /api/copilotkit 5xx: ${copilotkit.length}; any 5xx: ${bad.length}`);
+            if (copilotkit.length > 0) {
+              console.error(copilotkit.join("\n"));
+              process.exit(1);
+            }
+          '
+
+      - name: Certification summary
+        if: always()
+        run: |
+          {
+            echo "### Production Planner certification"
+            echo ""
+            echo "| Field | Value |"
+            echo "| -- | -- |"
+            echo "| Requested SHA | \`${{ inputs.expected_sha }}\` |"
+            echo "| Deployment | \`${{ steps.prod.outputs.deployment_url }}\` |"
+            echo "| Deployed SHA | \`${{ steps.prod.outputs.deployment_sha }}\` |"
+            echo "| Run | ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
