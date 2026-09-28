@@ -24,9 +24,9 @@ Invoke this skill when:
 
 Before proposing any fix, collect:
 
-1. **Package versions** -- Run `npm ls @copilotkit/runtime @copilotkit/react @copilotkit/core @ag-ui/client` (or the v1 equivalents). Version mismatches between runtime and react packages are a common root cause.
+1. **Package versions** -- Run `npm ls @copilotkit/runtime @copilotkit/react-core @copilotkit/channels @ag-ui/client @ag-ui/mastra` (or the v1 equivalents). Version mismatches between runtime and react packages are a common root cause.
 2. **Runtime mode** -- Is this SSE mode (`CopilotSseRuntime`) or Intelligence mode (`CopilotIntelligenceRuntime`)? Check the runtime constructor.
-3. **Transport configuration** -- What is `runtimeUrl` set to on the `CopilotKit` provider (from `@copilotkit/react-core/v2`)? Does it match the `basePath` in `createCopilotEndpoint`?
+3. **Transport configuration** -- What is `runtimeUrl` set to on the `CopilotKit` provider (from `@copilotkit/react-core/v2`)? Does it match the `basePath` in `createCopilotHonoHandler`?
 4. **Agent type** -- Is the agent a `BuiltInAgent`, `LangGraphAgent`, `A2AAgent`, or custom `AbstractAgent`?
 5. **Error messages** -- Collect the exact error from browser console and server logs. CopilotKit uses structured error codes (see `references/error-patterns.md`).
 6. **Browser network tab** -- Check the `/info` request (runtime discovery), the `/agent/:id/run` SSE stream, and any CORS preflight failures.

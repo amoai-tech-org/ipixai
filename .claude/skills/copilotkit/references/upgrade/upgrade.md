@@ -84,12 +84,12 @@ const runtime = new CopilotRuntime({ actions: [...] });
 **v2 pattern** (agents + Hono endpoint):
 
 ```ts
-import { CopilotRuntime, createCopilotEndpoint } from "@copilotkit/runtime";
+import { CopilotRuntime, createCopilotHonoHandler } from "@copilotkit/runtime/v2";
 import { BuiltInAgent } from "@copilotkit/agent";
 const runtime = new CopilotRuntime({
   agents: { myAgent: new BuiltInAgent({ model: "openai:gpt-4o" }) },
 });
-const app = createCopilotEndpoint({ runtime, basePath: "/api/copilotkit" });
+const app = createCopilotHonoHandler({ runtime, basePath: "/api/copilotkit" });
 ```
 
 ### 6. Update Provider
@@ -133,6 +133,6 @@ import { CopilotKit } from "@copilotkit/react-core/v2";
 | Render tool calls    | `useCopilotAction({ render })`                  | `useRenderToolCall`                                                        |
 | Chat suggestions     | `useCopilotChatSuggestions`                     | `useConfigureSuggestions`                                                  |
 | Runtime class        | `CopilotRuntime` (adapters)                     | `CopilotRuntime` (agents)                                                  |
-| Endpoint setup       | `copilotKitEndpoint()`                          | `createCopilotEndpoint()`                                                  |
+| Endpoint setup       | `copilotKitEndpoint()`                          | `createCopilotHonoHandler()`                                                  |
 | Agent definition     | `LangGraphAgent` endpoint                       | `AbstractAgent` / `BuiltInAgent`                                           |
 | Chat components      | `CopilotChat`, `CopilotPopup`, `CopilotSidebar` | `CopilotChat`, `CopilotPopup`, `CopilotSidebar` (from `@copilotkit/react`) |

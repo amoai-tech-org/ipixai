@@ -21,7 +21,7 @@ curl -v http://localhost:3001/api/copilotkit/info
 ```
 
 - **No response / connection refused** -> The server is not running. Start it.
-- **404** -> The basePath is wrong. Check `createCopilotEndpoint({ basePath })` vs the URL you are hitting.
+- **404** -> The basePath is wrong. Check `createCopilotHonoHandler({ basePath })` vs the URL you are hitting.
 - **500** -> The agent loading failed. Check server logs for the error.
 - **200 with JSON** -> Runtime is up. Proceed to step 2.
 
@@ -44,17 +44,17 @@ curl -v http://localhost:3001/api/copilotkit/info
 ### Step 4: Check package versions
 
 ```bash
-npm ls @copilotkit/runtime @copilotkit/react @copilotkit/core @ag-ui/client
+npm ls @copilotkit/runtime @copilotkit/react-core @copilotkit/channels @ag-ui/client @ag-ui/mastra
 ```
 
-All `@copilotkit/*` packages should be the same version. Mismatches cause `VERSION_MISMATCH` errors.
+`@copilotkit/runtime` and `@copilotkit/react-core` should match the tested iPix family. Verify the whole installed family together; do not require independently-versioned packages such as `@copilotkit/channels` to share that semver.
 
 ### Step 5: Check CORS (if cross-origin)
 
 Default CORS allows all origins without credentials. If you need credentials:
 
 ```ts
-createCopilotEndpoint({
+createCopilotHonoHandler({
   runtime,
   basePath: "/api/copilotkit",
   cors: {

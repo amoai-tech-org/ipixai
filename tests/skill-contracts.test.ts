@@ -1,9 +1,29 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
 
 function readRepoFile(path: string) {
   return readFileSync(join(process.cwd(), path), "utf8");
+}
+
+function readMarkdownTree(path: string): Array<{ path: string; content: string }> {
+  const root = join(process.cwd(), path);
+  const results: Array<{ path: string; content: string }> = [];
+
+  function visit(dir: string) {
+    for (const entry of readdirSync(dir)) {
+      const absolute = join(dir, entry);
+      if (statSync(absolute).isDirectory()) {
+        visit(absolute);
+      } else if (entry.endsWith(".md")) {
+        const relative = absolute.slice(process.cwd().length + 1);
+        results.push({ path: relative, content: readFileSync(absolute, "utf8") });
+      }
+    }
+  }
+
+  visit(root);
+  return results;
 }
 
 let agents: string;
@@ -231,4 +251,108 @@ describe("iPix engineering skill contracts", () => {
     expect(mergeConflicts).toContain("run the owning domain skill's targeted verification afterward");
     expect(mergeConflicts).toContain("run the cheapest decisive proof");
   });
+
+  test("CopilotKit Mastra reference matches the installed iPix runtime family and in-process architecture", () => {
+    const integration = readRepoFile(
+      ".claude/skills/copilotkit/references/integrations/references/integrations/mastra.md",
+    );
+
+    const packageJson = JSON.parse(readRepoFile("package.json")) as {
+      dependencies: Record<string, string>;
+    };
+    for (const name of [
+      "@copilotkit/runtime",
+      "@copilotkit/react-core",
+      "@copilotkit/channels",
+      "@ag-ui/client",
+      "@ag-ui/mastra",
+      "@mastra/core",
+      "@mastra/memory",
+      "@mastra/pg",
+    ]) {
+      const version = packageJson.dependencies[name]?.replace(/^[~^]/, "");
+      expect(version).toBeTruthy();
+      expect(integration).toContain(`| \`${name}\` | \`${version}\` |`);
+    }
+
+    expect(integration).toContain("requirePlannerResourceId()");
+    expect(integration).toContain("createLocalAgents(resourceId)");
+    expect(integration).toContain("TenantAbortRunner");
+    expect(integration).toContain("PostgresStore");
+    expect(integration).toContain("MASTRA_DATABASE_URL");
+    expect(integration).toContain("createCopilotHonoHandler");
+    expect(integration).toMatch(/`createCopilotEndpoint`[^\n]*deprecated alias/);
+    expect(integration).not.toContain("Current audited iPix family (2026-09-04)");
+    expect(integration).not.toContain("InMemoryAgentRunner");
+    expect(integration).not.toContain("LibSQLStore");
+  });
+
+  test("Mastra skill references do not present the retired 1.63.2 runtime as current", () => {
+    const stale = readMarkdownTree(".claude/skills/mastra")
+      .filter(({ content }) => content.includes("1.63.2"))
+      .map(({ path }) => path);
+
+    expect(stale).toEqual([]);
+  });
+
+  test("Mastra HITL guidance distinguishes native suspend interrupts from frontend-tool HITL", () => {
+    const copilotMastra = readRepoFile(
+      ".claude/skills/copilotkit/references/integrations/references/integrations/mastra.md",
+    );
+    const workflows = readRepoFile(".claude/skills/mastra/references/workflows.md");
+    const guidance = `${copilotMastra}\n${workflows}`;
+
+    expect(guidance).toContain("tool-call-suspended");
+    expect(guidance).toContain("useInterrupt");
+    expect(guidance).toContain("useHumanInTheLoop");
+    expect(guidance).toContain("@ag-ui/mastra 1.1.4");
+    expect(guidance).toMatch(/server[- ]revalidat/i);
+    expect(guidance).toMatch(/persisted[\s\S]*snapshot|snapshot[\s\S]*persisted/i);
+  });
+
+
+  test("CopilotKit and Mastra skill trees contain none of the retired runtime pins", () => {
+    const retiredPins = ["1.68.1", "1.63.2", "1.22.2", "0.9.0", "0.0.58"];
+    const stale = [
+      ...readMarkdownTree(".claude/skills/copilotkit"),
+      ...readMarkdownTree(".claude/skills/mastra"),
+    ].flatMap(({ path, content }) =>
+      retiredPins
+        .filter((pin) => content.includes(pin))
+        .map((pin) => `${path} -> ${pin}`),
+    );
+
+    expect(stale).toEqual([]);
+  });
+
+  test("iPix CopilotKit v2 conventions use the installed in-process runtime contract", () => {
+    const conventions = readRepoFile(
+      ".claude/skills/copilotkit/references/upgrade/ipix-v2-conventions.md",
+    );
+
+    expect(conventions).not.toContain("1.60.0");
+    expect(conventions).toContain("createCopilotHonoHandler");
+    expect(conventions).toContain("requirePlannerResourceId");
+    expect(conventions).toContain("createLocalAgents(resourceId)");
+    expect(conventions).toContain("TenantAbortRunner");
+    expect(conventions).toContain("PostgresStore");
+    expect(conventions).toContain("server revalidates");
+  });
+
+  test("active CopilotKit debugging guidance teaches the preferred Hono handler", () => {
+    const debugFiles = [
+      ".claude/skills/copilotkit/references/debug/debug.md",
+      ".claude/skills/copilotkit/references/debug/references/error-patterns.md",
+      ".claude/skills/copilotkit/references/debug/references/runtime-debugging.md",
+      ".claude/skills/copilotkit/references/debug/references/quick-workflows.md",
+    ];
+
+    for (const path of debugFiles) {
+      const content = readRepoFile(path);
+      expect(content, path).not.toContain("createCopilotEndpoint(");
+    }
+    expect(readRepoFile(debugFiles[0])).toContain("createCopilotHonoHandler");
+    expect(readRepoFile(debugFiles[2])).toContain("createCopilotHonoHandler");
+  });
+
 });

@@ -4,7 +4,7 @@ description: "Mastra framework for iPixai: docs lookup, agents, workflows, tools
 license: Apache-2.0
 metadata:
   author: Mastra
-  version: "2.2.0-ipix.5"
+  version: "2.2.0-ipix.6"
   basedOn: mastra-ai/skills 2.2.0 @ f79b794df9201b671b6602c6fc8ac0ad95478750 + iPix overlay
   repository: https://github.com/mastra-ai/skills
   title: Mastra framework guide
