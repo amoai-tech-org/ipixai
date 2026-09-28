@@ -53,7 +53,7 @@ const RETRY_FRACTIONS = [0.05, 0.15, 0.3, 0.3] as const;
 export const plannerRuntimeInstanceId = randomUUID();
 export interface PlannerRunOwnerHandle {
   publish(event: BaseEvent): Promise<void>;
-  close(): Promise<void>;
+  close(terminal?: BaseEvent): Promise<void>;
 }
 
 export interface PlannerRemoteRunConnection {
@@ -239,16 +239,17 @@ export class PlannerRunControl {
     return {
       publish: async (event) => {
         if (closed) return;
-        // Match CopilotKit's active-run ReplaySubject semantics for a remote
-        // reconnect: a controller receives the run from its beginning, then
-        // continues with live events. The buffer lives only for this active run.
         replayBuffer.push(event);
         if (remoteListener) {
           await enqueue({ kind: "event", runId, event });
         }
       },
-      close: async () => {
+      close: async (terminal) => {
         if (closed) return;
+        if (terminal && remoteListener) {
+          replayBuffer.push(terminal);
+          await enqueue({ kind: "event", runId, event: terminal });
+        }
         closed = true;
         stopRequests.clear();
         connectRequests.clear();
