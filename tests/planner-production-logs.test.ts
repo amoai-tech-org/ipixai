@@ -16,9 +16,17 @@ import {
  */
 const CERT_THREAD_ID = "a965d188-06b2-4678-b82b-9af78fa66461";
 const OTHER_THREAD_ID = "b17c4e02-1111-4222-8333-444455556666";
+/**
+ * The stamp the journey's first CopilotKit request produces. Defaults to the
+ * fixture entry timestamp, so a fully covered scan compares equal and passes.
+ */
+const CERT_FIRST_REQUEST_AT_MS = 1790552958225;
 
-function traceJson(threadIds: string[] = [CERT_THREAD_ID]): string {
-  return `${JSON.stringify({ threadIds })}\n`;
+function traceJson(
+  threadIds: string[] = [CERT_THREAD_ID],
+  firstCopilotkitRequestAtMs: number | null = CERT_FIRST_REQUEST_AT_MS,
+): string {
+  return `${JSON.stringify({ threadIds, firstCopilotkitRequestAtMs })}\n`;
 }
 
 /**
@@ -145,7 +153,7 @@ describe("planner production log check", () => {
         vercelLogEntry({ requestPath: `/api/copilotkit/agent/default/stop/${OTHER_THREAD_ID}` }),
         vercelLogEntry({ requestPath: "/api/copilotkit/agent/default/run" }),
       ]),
-      { certThreadIds: [CERT_THREAD_ID] },
+      { certThreadIds: [CERT_THREAD_ID], firstCertRequestAtMs: CERT_FIRST_REQUEST_AT_MS },
     );
     const verdict = evaluatePlannerProductionLogs(summary);
 
@@ -161,7 +169,7 @@ describe("planner production log check", () => {
         vercelLogEntry({ requestPath: `/api/copilotkit/agent/default/stop/${CERT_THREAD_ID}` }),
         vercelLogEntry({ requestPath: `/api/planner/threads/${CERT_THREAD_ID}/messages` }),
       ]),
-      { certThreadIds: [CERT_THREAD_ID] },
+      { certThreadIds: [CERT_THREAD_ID], firstCertRequestAtMs: CERT_FIRST_REQUEST_AT_MS },
     );
 
     expect(summary.certThreadHits).toEqual([CERT_THREAD_ID]);
@@ -169,13 +177,14 @@ describe("planner production log check", () => {
   });
 
   // `vercel logs` returns the newest --limit entries, so reaching the ceiling
-  // drops the OLDEST entries rather than the journey — and the thread-id guard
-  // independently proves the journey is inside the window. Reported, not gated:
-  // failing here would reject a window that demonstrably contains the run.
+  // drops the OLDEST entries rather than the journey. Reported, not gated:
+  // failing on volume would reject a window that demonstrably contains the run —
+  // a real certification hit the ceiling while still covering its whole journey.
+  // Coverage itself is gated separately and precisely, below.
   it("warns without failing when the scan reached the limit", () => {
     const summary = analyzePlannerProductionLogs(
       asJsonLines(Array.from({ length: 50 }, () => vercelLogEntry())),
-      { certThreadIds: [CERT_THREAD_ID] },
+      { certThreadIds: [CERT_THREAD_ID], firstCertRequestAtMs: CERT_FIRST_REQUEST_AT_MS },
     );
 
     const reached = evaluatePlannerProductionLogs(summary, { maxEntries: 50 });
@@ -238,19 +247,44 @@ describe("planner production log check", () => {
       expect(evaluatePlannerProductionLogs(summary).ok).toBe(true);
     });
 
-    it("skips the coverage gate when the trace predates the stamp", () => {
+    // Fail closed. Once certification ids are supplied this IS a certification,
+    // so absent coverage evidence must fail rather than skip the guard — a
+    // silently skipped guard is how a truncated scan goes green.
+    it("fails when the certification trace carries no first-request stamp", () => {
       const summary = analyzePlannerProductionLogs(
         asJsonLines([vercelLogEntry({ timestamp: FIRST_REQUEST + 60_000 })]),
         { certThreadIds: [CERT_THREAD_ID] },
       );
 
       expect(summary.certFirstRequestAtMs).toBeNull();
+      const verdict = evaluatePlannerProductionLogs(summary);
+      expect(verdict.ok, "missing coverage evidence must not pass").toBe(false);
+      expect(verdict.problems.join(" ")).toContain("no first-request timestamp");
+    });
+
+    it("fails when no scanned log entry carries a usable timestamp", () => {
+      const summary = analyzePlannerProductionLogs(
+        asJsonLines([vercelLogEntry({ timestamp: undefined })]),
+        { certThreadIds: [CERT_THREAD_ID], firstCertRequestAtMs: FIRST_REQUEST },
+      );
+
+      expect(summary.windowStartMs).toBeNull();
+      const verdict = evaluatePlannerProductionLogs(summary);
+      expect(verdict.ok, "an untimestamped window cannot prove coverage").toBe(false);
+      expect(verdict.problems.join(" ")).toContain("usable timestamp");
+    });
+
+    // Parser-only mode (no certification ids) stays usable for the pure parsing
+    // tests above; coverage is only meaningful for a certification.
+    it("does not require coverage evidence when no certification ids are supplied", () => {
+      const summary = analyzePlannerProductionLogs(asJsonLines([vercelLogEntry()]));
       expect(evaluatePlannerProductionLogs(summary).ok).toBe(true);
     });
   });
 
   it("reads the first-request stamp from the trace and rejects junk", () => {
-    expect(readCertTrace(traceJson()).firstCopilotkitRequestAtMs).toBeNull();
+    expect(readCertTrace(traceJson()).firstCopilotkitRequestAtMs).toBe(CERT_FIRST_REQUEST_AT_MS);
+    expect(readCertTrace(traceJson([CERT_THREAD_ID], null)).firstCopilotkitRequestAtMs).toBeNull();
     expect(
       readCertTrace(JSON.stringify({ threadIds: [], firstCopilotkitRequestAtMs: 123 }))
         .firstCopilotkitRequestAtMs,
@@ -353,6 +387,24 @@ describe("planner production log check", () => {
 
       expect(run(asJsonLines([vercelLogEntry()]), { traceText: null }).result.exitCode).toBe(2);
       expect(run(asJsonLines([vercelLogEntry()]), { traceText: traceJson([]) }).result.exitCode).toBe(2);
+    });
+
+    // Distinct from a certification failure: nothing about the deployment is
+    // wrong, the evidence needed to check it was not produced. Exit 2, not 1.
+    it("exits 2 when the trace carries no first-request stamp", () => {
+      const { result, error } = run(asJsonLines([vercelLogEntry()]), {
+        traceText: traceJson([CERT_THREAD_ID], null),
+      });
+
+      expect(result.exitCode).toBe(2);
+      expect(error.mock.calls.flat().join(" ")).toContain("records no first CopilotKit request");
+    });
+
+    it("exits 1 when no scanned entry carries a usable timestamp", () => {
+      const { result, error } = run(asJsonLines([vercelLogEntry({ timestamp: undefined })]));
+
+      expect(result.exitCode).toBe(1);
+      expect(error.mock.calls.flat().join(" ")).toContain("usable timestamp");
     });
 
     it("exits 1 when the window does not contain the certification's own thread", () => {

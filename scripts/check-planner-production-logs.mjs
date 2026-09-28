@@ -250,22 +250,33 @@ export function evaluatePlannerProductionLogs(summary, { maxEntries = null } = {
     );
   }
 
-  // Coverage, gated. Hitting the `--limit` ceiling means the OLDEST entries were
-  // dropped, but that alone says nothing about whether the JOURNEY was covered:
-  // measured on 2026-09-28 a real certification run hit the 5000 ceiling while
-  // still scanning from 2026-09-28T01:22:02.072Z — 791 ms BEFORE its first
-  // `/api/copilotkit` request at 01:22:02.863Z — so failing on volume would have
-  // rejected a run whose coverage was complete. What actually matters is whether
-  // the scan reaches back before the journey began; if it does not, an early
-  // `/run` 5xx could have been dropped and the pass would be unsound.
-  if (
-    summary.certFirstRequestAtMs !== null &&
-    summary.windowStartMs !== null &&
-    summary.windowStartMs > summary.certFirstRequestAtMs + CLOCK_SKEW_TOLERANCE_MS
-  ) {
-    problems.push(
-      `the scan starts at ${new Date(summary.windowStartMs).toISOString()}, after the certification's first /api/copilotkit request at ${new Date(summary.certFirstRequestAtMs).toISOString()}, so the beginning of the journey was truncated and an earlier 5xx could have been missed`,
-    );
+  // Coverage, gated and FAIL-CLOSED. Hitting the `--limit` ceiling means the
+  // OLDEST entries were dropped, but that alone says nothing about whether the
+  // JOURNEY was covered: measured on 2026-09-28 a real certification run hit the
+  // 5000 ceiling while still scanning from 01:22:02.072Z — 791 ms BEFORE its
+  // first `/api/copilotkit` request at 01:22:02.863Z — so failing on volume alone
+  // would have rejected a run whose coverage was complete. What matters is
+  // whether the scan reaches back before the journey began.
+  //
+  // Supplying certification thread ids means this IS a certification, so both
+  // pieces of coverage evidence are MANDATORY. Missing evidence must never read
+  // as "passed": an absent first-request stamp or an absent log timestamp would
+  // otherwise skip this guard silently and let a truncated scan go green, which
+  // is the exact defect this check exists to eliminate.
+  if (summary.certThreadIdsChecked > 0) {
+    if (summary.certFirstRequestAtMs === null) {
+      problems.push(
+        "the certification trace carries no first-request timestamp, so the scan cannot be shown to cover the journey (missing coverage evidence must not pass)",
+      );
+    } else if (summary.windowStartMs === null) {
+      problems.push(
+        "none of the scanned log entries carried a usable timestamp, so the scan cannot be shown to reach back over the certification",
+      );
+    } else if (summary.windowStartMs > summary.certFirstRequestAtMs + CLOCK_SKEW_TOLERANCE_MS) {
+      problems.push(
+        `the scan starts at ${new Date(summary.windowStartMs).toISOString()}, after the certification's first /api/copilotkit request at ${new Date(summary.certFirstRequestAtMs).toISOString()}, so the beginning of the journey was truncated and an earlier 5xx could have been missed`,
+      );
+    }
   }
 
   // Reported, not gated: the ceiling was reached but coverage is proven above.
@@ -327,6 +338,17 @@ export function runPlannerProductionLogCheck({
   if (trace.threadIds.length === 0) {
     error(
       `::error title=Planner production log check misconfigured::the certification trace at ${traceFile} contains no thread ids, so the scanned window cannot be tied to this run`,
+    );
+    return { exitCode: 2, summary: null };
+  }
+
+  // Required for the same reason: without knowing when the journey started, the
+  // scan's coverage cannot be checked, and skipping the check would let a
+  // truncated window pass. This is a misconfiguration (exit 2), not a
+  // certification failure (exit 1) — nothing about the deployment is wrong.
+  if (trace.firstCopilotkitRequestAtMs === null) {
+    error(
+      `::error title=Planner production log check misconfigured::the certification trace at ${traceFile} records no first CopilotKit request, so the scanned window cannot be shown to cover the journey`,
     );
     return { exitCode: 2, summary: null };
   }

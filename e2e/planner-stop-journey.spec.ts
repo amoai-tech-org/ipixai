@@ -166,6 +166,13 @@ test.describe("planner stop journey (authenticated) @S6b1f0290", () => {
       written.threadIds.length,
       "the journey must name at least one Planner thread for the Production log check",
     ).toBeGreaterThan(0);
+    // The provider-side check needs this to prove the scanned log window reaches
+    // back over the whole journey. Fail here — where the cause is obvious —
+    // rather than letting the log check discover an unusable trace afterwards.
+    expect(
+      typeof written.firstCopilotkitRequestAtMs,
+      "the journey must record when its first CopilotKit request went out",
+    ).toBe("number");
 
     expect(problems, "no console errors, page errors, or 5xx during the journey").toEqual([]);
   });
