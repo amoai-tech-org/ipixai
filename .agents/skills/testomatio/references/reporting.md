@@ -1,5 +1,48 @@
 # Testomat.io Reporting
 
+## Contents
+
+- [Reporter setup and result reporting](#reporter-setup-and-result-reporting)
+- [Step 1: Detect Language & Framework](#step-1-detect-language--framework)
+- [Step 2: Configure Credentials](#step-2-configure-credentials)
+- [Step 3: Install & Configure Reporter](#step-3-install--configure-reporter)
+  - [JavaScript / TypeScript](#javascript--typescript)
+  - [Python](#python)
+  - [Java (JUnit, TestNG, Cucumber, Karate)](#java-junit-testng-cucumber-karate)
+- [Step 4: Import Automated Tests to Testomat.io TMS](#step-4-import-automated-tests-to-testomatio-tms)
+  - [JavaScript / TypeScript](#javascript--typescript-1)
+  - [Python](#python-1)
+  - [Java (JUnit, TestNG)](#java-junit-testng)
+  - [JUnit XML (C#, PHP, Ruby, Go, etc.)](#junit-xml-c-php-ruby-go-etc)
+- [Step 5: Verify Setup](#step-5-verify-setup)
+  - [Via Testomat.io MCP (preferred, if enabled)](#via-testomatio-mcp-preferred-if-enabled)
+  - [Debug Mode (alternative)](#debug-mode-alternative)
+- [Step 6: Configure Artifacts (only on explicit request)](#step-6-configure-artifacts-only-on-explicit-request)
+  - [Create S3 Bucket (if needed)](#create-s3-bucket-if-needed)
+  - [Option A: Testomat.io UI (recommended)](#option-a-testomatio-ui-recommended)
+  - [Option B: Environment Variables](#option-b-environment-variables)
+  - [Verify Artifacts](#verify-artifacts)
+- [References](#references)
+- [Sprint QA progress reporting](#sprint-qa-progress-reporting)
+- [When to Use](#when-to-use)
+- [How to Identify the Sprint](#how-to-identify-the-sprint)
+- [Rules](#rules)
+  - [Quick Commands](#quick-commands)
+  - [Step 1: Resolve Sprint Identity](#step-1-resolve-sprint-identity)
+  - [Step 2: Gather Sprint Metadata & Time Range](#step-2-gather-sprint-metadata--time-range)
+  - [Step 3: Collect Run Data](#step-3-collect-run-data)
+  - [Step 4: Build Report Sections](#step-4-build-report-sections)
+  - [Step 5: Write Output File](#step-5-write-output-file)
+  - [Step 6: Offer Markdown Export](#step-6-offer-markdown-export)
+- [HTML Template Styling](#html-template-styling)
+  - [Color Palette](#color-palette)
+  - [Typography](#typography)
+  - [Status Badges](#status-badges)
+  - [Key Elements](#key-elements)
+  - [HTML Structure](#html-structure)
+
+---
+
 ## Reporter setup and result reporting
 
 # Testomat.io Reporter Setup

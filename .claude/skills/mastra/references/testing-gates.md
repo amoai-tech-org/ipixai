@@ -11,6 +11,29 @@ tags: mastra, testing, ci, pre-merge, post-merge, evals, hitl, workflows
 
 Use the **smallest test set that proves every affected risk class**. Do not run every Mastra test for every PR, and do not let one green proof substitute for another.
 
+## Contents
+
+- [Evidence order](#evidence-order)
+- [Source/version rule](#sourceversion-rule)
+- [A. Registry/config — always when agent wiring changes](#a-registryconfig--always-when-agent-wiring-changes)
+- [B. Deterministic tool contracts — when tools or planning logic change](#b-deterministic-tool-contracts--when-tools-or-planning-logic-change)
+- [C. Natural-language Planner routing — when prompts/model/tool descriptions/routing change](#c-natural-language-planner-routing--when-promptsmodeltool-descriptionsrouting-change)
+- [D. Memory/persistence — when memory/storage/thread scope changes](#d-memorypersistence--when-memorystoragethread-scope-changes)
+- [E. Workflow/HITL/resume — when a consequential workflow exists or changes](#e-workflowhitlresume--when-a-consequential-workflow-exists-or-changes)
+- [F. Streaming/Stop/abort — when cancellation matters](#f-streamingstopabort--when-cancellation-matters)
+- [G. Observability/privacy — when tracing/evals/RequestContext change](#g-observabilityprivacy--when-tracingevalsrequestcontext-change)
+- [H. Package-family change — when any Mastra dependency changes](#h-package-family-change--when-any-mastra-dependency-changes)
+- [Always for merged Mastra changes](#always-for-merged-mastra-changes)
+- [If model/prompt/routing changed](#if-modelpromptrouting-changed)
+- [If memory/storage changed](#if-memorystorage-changed)
+- [If workflow/HITL changed](#if-workflowhitl-changed)
+- [If Stop/abort changed](#if-stopabort-changed)
+- [If Mastra package family changed](#if-mastra-package-family-changed)
+- [Current iPix executable evidence](#current-ipix-executable-evidence)
+- [Official research basis](#official-research-basis)
+
+---
+
 ## Evidence order
 
 ```text

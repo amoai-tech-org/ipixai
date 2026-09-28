@@ -12,9 +12,9 @@ tags: mastra, react, vite, ai-sdk-ui
 ## Contents
 
 - [Before you begin](#before-you-begin)
-- [Create a new React + Vite app (optional)](#create-a-new-react-vite-app-optional)
+- [Create a new React + Vite app (optional)](#create-a-new-react--vite-app-optional)
 - [Initialize Mastra](#initialize-mastra)
-- [Install AI SDK UI & AI elements](#install-ai-sdk-ui-ai-elements)
+- [Install AI SDK UI & AI elements](#install-ai-sdk-ui--ai-elements)
 - [Create a chat route](#create-a-chat-route)
 - [Add the chat UI](#add-the-chat-ui)
 - [Test your agent](#test-your-agent)

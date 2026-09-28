@@ -29,6 +29,23 @@ sources:
 Builds on [`react-core/react-core.md`](react-core/react-core.md) (provider) and
 [`runtime/runtime.md`](runtime/runtime.md) (CopilotRuntime). Read those first if unfamiliar.
 
+## Contents
+
+- [Setup](#setup)
+  - [Runtime side (`app/routes/api.copilotkit.$.tsx`)](#runtime-side-approutesapicopilotkittsx)
+  - [Client side (`app/root.tsx` or the app shell)](#client-side-approottsx-or-the-app-shell)
+- [Core Patterns](#core-patterns)
+  - [Custom catalog](#custom-catalog)
+  - [Override the loading skeleton](#override-the-loading-skeleton)
+- [Common Mistakes](#common-mistakes)
+  - [CRITICAL forgetting runtime.a2ui](#critical-forgetting-runtimea2ui)
+  - [HIGH manually wiring renderActivityMessages for A2UI](#high-manually-wiring-renderactivitymessages-for-a2ui)
+  - [MEDIUM re-emitting createSurface on every snapshot](#medium-re-emitting-createsurface-on-every-snapshot)
+  - [MEDIUM custom action bridge without a2uiAction cleanup](#medium-custom-action-bridge-without-a2uiaction-cleanup)
+  - [MEDIUM installing @copilotkitnext/a2ui-renderer](#medium-installing-copilotkitnexta2ui-renderer)
+
+---
+
 ## Setup
 
 A2UI has two halves. The runtime declares a2ui middleware; the client enables

@@ -2,6 +2,30 @@
 
 The C4 model provides a hierarchical way to visualize software architecture at different levels of abstraction: Context, Containers, Components, and Code.
 
+## Contents
+
+- [C4 Model Levels](#c4-model-levels)
+- [C4 Context Diagram](#c4-context-diagram)
+  - [Basic Syntax](#basic-syntax)
+  - [Elements](#elements)
+  - [Comprehensive Context Example](#comprehensive-context-example)
+- [C4 Container Diagram](#c4-container-diagram)
+  - [Basic Syntax](#basic-syntax-1)
+  - [Container Elements](#container-elements)
+  - [Container Boundaries](#container-boundaries)
+  - [Comprehensive Container Example](#comprehensive-container-example)
+- [C4 Component Diagram](#c4-component-diagram)
+  - [Basic Syntax](#basic-syntax-2)
+  - [Comprehensive Component Example](#comprehensive-component-example)
+- [Microservices Architecture Example](#microservices-architecture-example)
+- [Best Practices](#best-practices)
+- [Common Architecture Patterns](#common-architecture-patterns)
+  - [Monolithic Application](#monolithic-application)
+  - [Three-Tier Architecture](#three-tier-architecture)
+  - [Event-Driven Architecture](#event-driven-architecture)
+
+---
+
 ## C4 Model Levels
 
 1. **System Context** - Shows the system and its users/external systems
