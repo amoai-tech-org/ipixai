@@ -55,6 +55,12 @@ async function openSupabaseBus(input: {
     },
     accessToken: async () => input.accessToken,
   });
+
+  // Private Realtime authorization is evaluated from the socket JWT. Set it
+  // explicitly before joining the channel rather than relying on the generic
+  // accessToken callback to propagate into Realtime in every runtime/version.
+  await client.realtime.setAuth(input.accessToken);
+
   const channel = client.channel(plannerRunControlTopic(input.resourceId, input.threadId, input.secret), {
     config: { private: true, broadcast: { ack: true, self: false } },
   });
