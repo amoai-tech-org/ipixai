@@ -48,14 +48,15 @@ describe("PlannerRunControl resilience", () => {
 
     const received: BaseEvent[] = [];
     connection?.onEvent((event) => received.push(event));
-    const fallback = {
-      type: EventType.RUN_ERROR,
-      message: "planner_run_owner_closed",
-    } as BaseEvent;
 
-    await handle.close(fallback);
+    await handle.close();
 
-    expect(received).toEqual([expect.objectContaining({ type: EventType.RUN_ERROR })]);
+    expect(received).toEqual([
+      expect.objectContaining({
+        type: EventType.RUN_ERROR,
+        message: "planner_run_owner_closed",
+      }),
+    ]);
     await connection?.close();
   });
 });
