@@ -17,19 +17,28 @@ import {
 const RESOURCE_ID = /^org:([0-9a-f-]{36})::user:([0-9a-f-]{36})$/i;
 const EVENT = "planner-run-control";
 const SUBSCRIBE_TIMEOUT_MS = 2_000;
+const TOPIC_KEY_CONTEXT = "ipix/planner-run-control/topic-key/v1";
+
+function plannerRunTopicKey(secret: string): Buffer {
+  return createHmac("sha256", secret).update(TOPIC_KEY_CONTEXT).digest();
+}
 
 export function plannerRunControlTopic(resourceId: string, threadId: string, secret: string): string {
   const match = RESOURCE_ID.exec(resourceId);
   if (!match) throw new Error("invalid planner resourceId");
   const [, orgId, userId] = match;
   const canonicalThreadId = splitRunThreadIds(resourceId, threadId).mastraThreadId;
-  const digest = createHmac("sha256", secret)
+  // Domain-separate topic signing from other uses of the privileged backend key.
+  // Topics are intentionally ephemeral: drain active Planner runs before rotating
+  // that backend key so a mixed-key deployment cannot split one in-flight run.
+  const digest = createHmac("sha256", plannerRunTopicKey(secret))
     .update(resourceId)
     .update("\0")
     .update(canonicalThreadId)
     .digest("hex");
   return `planner-run:${orgId.toLowerCase()}:${userId.toLowerCase()}:${digest}`;
 }
+
 async function openSupabaseBus(input: {
   resourceId: string;
   threadId: string;
