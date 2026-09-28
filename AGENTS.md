@@ -196,9 +196,9 @@ For tasks touching data/auth/runtime, inspect the existing contract before creat
 - migration/type drift;
 - relevant security findings.
 
-Default writes: **disposable Postgres plus this repository's own pinned `mastra` migrations**, applied to a local server on `127.0.0.1` (the only host `src/mastra/pg-store.ts` accepts outside hosted mode). The exact procedure is below. `supabase start` does **not** work in this working tree — do not follow it as the default. Hosted reads use the approved non-production target unless the task explicitly says otherwise.
+Default writes: **disposable Postgres plus this repository's own pinned `mastra` migrations**, applied to a local server on `127.0.0.1` (the only host `src/mastra/pg-store.ts` accepts outside hosted mode). The exact procedure is below. `supabase start` does **not** work in a working tree that has the dotenvx-encrypted `.env.local` — the normal local setup, and the reason this is the default; see the known breakage below. Hosted reads use the approved non-production target unless the task explicitly says otherwise.
 
-**Known breakage — `supabase start` fails in this repository (verified 2026-09-28).** The pinned CLI (`supabase` 2.116.0) aborts before touching Docker:
+**Known breakage — `supabase start` fails in a working tree that contains the dotenvx-encrypted `.env.local` (verified 2026-09-28).** This is a **local-environment defect, not a repository-wide one**: CI has no `.env.local`, and the `supabase-fresh-replay` job runs the real `supabase start` plus `supabase db reset --local` path successfully on every pull request (`.github/workflows/ci.yml`). The pinned CLI (`supabase` 2.116.0) aborts before touching Docker:
 
 ```text
 $ supabase start
