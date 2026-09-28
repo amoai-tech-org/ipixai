@@ -83,11 +83,17 @@ export function linesOutsideFences(text) {
   text.split(/\r?\n/).forEach((line, index) => {
     const match = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
     if (fence) {
+      // A closing fence may be followed only by spaces or tabs — for **both**
+      // marker families. The tilde allowance belongs to the *opening* fence
+      // (a tilde info string may itself contain tildes and backticks); it does
+      // not apply here. Treating `~~~ extra` as a closer inverted the fence
+      // state for the rest of the file, inventing one heading and hiding a real
+      // one. Verified against `marked` as the CommonMark reference.
       const closes =
         match !== null &&
         match[1][0] === fence.marker &&
         match[1].length >= fence.length &&
-        (fence.marker === "~" || match[2].trim() === "");
+        match[2].trim() === "";
       if (closes) fence = null;
       return;
     }

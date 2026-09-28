@@ -85,6 +85,41 @@ describe("GitHub heading slugs", () => {
     expect(markdownHeadings(text)).toEqual(["Real"]);
   });
 
+  it.each([
+    [
+      "a tilde closer may not carry trailing content",
+      ["# Title", "~~~", "# Hidden", "~~~ not a close", "# StillHidden", "~~~", "# RealHeading"],
+      ["Title", "RealHeading"],
+    ],
+    [
+      "a tilde fence may open with an info string",
+      ["~~~js", "# Hidden", "~~~", "# Real"],
+      ["Real"],
+    ],
+    [
+      "a backtick closer may not carry trailing content",
+      ["```", "# Hidden", "``` extra", "# StillHidden", "```", "# Real"],
+      ["Real"],
+    ],
+    [
+      "a shorter run does not close a longer opener",
+      ["````", "# Hidden", "```", "# StillHidden", "````", "# Real"],
+      ["Real"],
+    ],
+    [
+      "a different marker family does not close",
+      ["```", "# Hidden", "~~~", "# StillHidden", "```", "# Real"],
+      ["Real"],
+    ],
+  ])("matches CommonMark: %s", (_label, lines, expected) => {
+    // Expected values come from `marked`, a CommonMark implementation, not from
+    // this code — the same reason the slug vectors come from `github-slugger`.
+    // The first case is the one that was wrong: treating `~~~ not a close` as a
+    // closer inverted the fence state for the rest of the document, inventing
+    // `StillHidden` and hiding the real `RealHeading`.
+    expect(markdownHeadings(`${lines.join("\n")}\n`)).toEqual(expected);
+  });
+
   it("does not read anchors out of fenced examples", () => {
     const text = "```md\nsee [x](#not-a-real-anchor)\n```\n\n[real](#real)\n\n## Real\n";
     expect(anchorsOutsideFences(text)).toEqual(["real"]);
