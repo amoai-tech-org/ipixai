@@ -85,9 +85,9 @@ PR work is complete only when:
 - invalid/stale/out-of-scope/noise findings are resolved with evidence or ownership
 - exact-head CI is green
 - no unresolved blocker thread remains
-- the PR body's pre-merge checklist has been reviewed and updated so every tick reflects verified evidence at the current head (no stale or assumed ticks)
-- the PR body's success criteria have been reviewed and updated against that same evidence, with unprovable or descoped criteria marked explicitly rather than deleted
-- **explicit human approval for the exact current head SHA is recorded** — this is a hard gate; an agent never performs the merge itself (see `AGENTS.md` § PR instructions → Merge authority)
+- the PR body's pre-merge checklist has been reviewed so every original item remains present and is marked passed with verified current-head evidence, explicitly N/A or blocked with a reason, or failed; silently unchecking, deleting or weakening an item is prohibited
+- the PR body's success criteria have been reviewed against that same evidence, with every original criterion still present and any unprovable, changed or descoped criterion marked explicitly rather than deleted or weakened
+- **explicit human approval for the exact current head SHA is recorded** — this is a hard gate; an agent never performs the merge itself (see `AGENTS.md` § PR instructions → Merge authority — human approval is mandatory)
 - post-merge checks are defined before merge
 
 ## Agent prompt
