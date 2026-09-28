@@ -101,7 +101,7 @@ STOP before merge if an actionable thread is unresolved, a required check is red
 
 ## Post-merge local-main synchronization — mandatory before next task
 
-After a PR merges, complete the applicable post-merge proof in [post-merge.md](references/post-merge.md), then synchronize local `main` before creating the next task branch/worktree. The safe sequence is: fetch remote truth → inspect divergence → preserve any local-only commits → fast-forward local `main` only when safe → prove `main...origin/main = 0 0`. Never silently reset local-only work. Do not automatically rebase active feature branches merely because another PR merged; update them only when dependency, conflict, or strict-main policy requires it.
+After a PR merges, complete the applicable post-merge proof in [post-merge.md](references/post-merge.md), then synchronize local `main` before creating the next task branch/worktree. The safe sequence is: fetch remote truth and stop if the fetch fails → inspect divergence → preserve any local-only commits → fast-forward local `main` only when safe → prove `main...origin/main = 0 0`. Never silently reset local-only work. Do not automatically rebase active feature branches merely because another PR merged; update them only when dependency, conflict, or strict-main policy requires it.
 
 At the Done gate, explicitly decide whether the change requires durable docs and/or a changelog entry:
 

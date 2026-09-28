@@ -229,7 +229,7 @@ Rules: `.cursor/rules/`. Canonical skill source tree: `.agents/skills/`. Claude 
 - Review comments are hypotheses until verified against current code/runtime.
 - No unresolved BLOCKER/HIGH before merge.
 - Merge ≠ Done. Canonical post-merge rules: `.claude/skills/tasks/references/post-merge.md`.
-- After merge, safely synchronize local `main` with `origin/main` before creating the next task branch/worktree; preserve local-only commits first and never silently reset them.
+- After merge, safely synchronize local `main` with `origin/main` before creating the next task branch/worktree; preserve local-only commits first, and do not reset them silently. If synchronization cannot be completed safely — or the fetch itself fails — hand it to the human owner rather than starting the next task on an unverified base.
 
 ## Linear task execution
 

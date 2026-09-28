@@ -28,7 +28,10 @@ Post-merge verification starts immediately after merge, not "eventually." For a 
 After the merged-main proof is complete and **before creating the next task branch/worktree**, synchronize local `main` safely:
 
 ```bash
-git fetch origin --prune
+# A failed fetch must STOP the gate. `git rev-list` would otherwise compare
+# against stale remote-tracking refs and could report `0 0` without proving
+# anything about the real remote.
+git fetch origin --prune || { echo "STOP: git fetch failed - the divergence check would compare stale refs" >&2; exit 1; }
 git rev-list --left-right --count main...origin/main
 ```
 
@@ -37,6 +40,7 @@ Interpret the result as `<local-only> <remote-only>`:
 - `0 0` → PASS: local `main` already matches `origin/main`.
 - `0 N` → local `main` is only behind. Fast-forward it from the worktree that owns `main` with `git merge --ff-only origin/main`, then re-run the divergence check.
 - `N 0` or `N M` with local-only commits → **STOP**. Preserve those local-only commits on an appropriate branch/PR before synchronizing `main`; never silently reset or discard them.
+- the fetch itself failed → **STOP**. The divergence check is meaningless against stale remote-tracking refs, so fix connectivity or authentication and re-run it. Never treat an unverifiable `0 0` as synchronization.
 
 Do not automatically rebase active feature branches just because another PR merged. Update/rebase an active branch only when its dependency, conflict, or strict-main policy requires it.
 
@@ -100,7 +104,7 @@ A local pass does not prove preview environment bindings; a preview pass does no
 ## Agent prompt
 
 ```text
-Verify the merged outcome rather than assuming merge means Done. Fetch current origin/main, record the merge/head SHA, confirm main CI and deployment health, then run the smallest production/runtime smoke journey that proves the task outcome. Before creating the next task branch/worktree, fetch with prune, inspect `main...origin/main`, preserve any local-only commits, fast-forward local `main` only when safe, and require `0 0`; do not automatically rebase unrelated active feature branches. Complete required post-merge checks within 1 business day of merge unless the task explicitly documents a longer window; do not let a merged task sit un-verified indefinitely. Add domain-specific proof for Supabase, CopilotKit, Mastra, Cloudinary, auth/tenant, or UI when those areas changed. Route every residual risk to FIXED, NOT A PROBLEM with evidence, EXISTING LINEAR OWNER, or NEW LINEAR TASK REQUIRED. Update Linear with PR URL, merge SHA, CI/deploy/runtime evidence, and only set 100%/Done when all applicable post-merge checks pass.
+Verify the merged outcome rather than assuming merge means Done. Fetch current origin/main, record the merge/head SHA, confirm main CI and deployment health, then run the smallest production/runtime smoke journey that proves the task outcome. Before creating the next task branch/worktree, fetch with prune, inspect `main...origin/main`, preserve any local-only commits, fast-forward local `main` only when safe, require `0 0`, and stop rather than conclude if the fetch itself failed; do not automatically rebase unrelated active feature branches. Complete required post-merge checks within 1 business day of merge unless the task explicitly documents a longer window; do not let a merged task sit un-verified indefinitely. Add domain-specific proof for Supabase, CopilotKit, Mastra, Cloudinary, auth/tenant, or UI when those areas changed. Route every residual risk to FIXED, NOT A PROBLEM with evidence, EXISTING LINEAR OWNER, or NEW LINEAR TASK REQUIRED. Update Linear with PR URL, merge SHA, CI/deploy/runtime evidence, and only set 100%/Done when all applicable post-merge checks pass.
 ```
 
 ## Post-merge journey certification
