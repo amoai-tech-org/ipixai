@@ -1,6 +1,14 @@
 ---
 name: playwright-cli
-description: Drive a real browser from the command line with playwright-cli — open pages, navigate, click, fill forms, read the rendered DOM, capture snapshots and screenshots, and run or debug Playwright tests. Use this whenever the task depends on how a page actually behaves or renders: verifying a UI change really works, reproducing a bug in a live browser, checking an authenticated or gated page, walking a multi-step user flow, or writing and fixing a Playwright spec. Reach for it even when the request never says "browser" or "Playwright" — if a rendered page, a snapshot, or a screenshot would settle the question faster than reading source, this is the skill.
+description: >-
+  Drive a real browser from the command line with playwright-cli — open pages, navigate,
+  click, fill forms, read the rendered DOM, capture snapshots and screenshots, and run or
+  debug Playwright tests. Use this whenever the task depends on how a page actually behaves
+  or renders: verifying a UI change really works, reproducing a bug in a live browser,
+  checking an authenticated or gated page, walking a multi-step user flow, or writing and
+  fixing a Playwright spec. Reach for it even when the request never says "browser" or
+  "Playwright" — if a rendered page, a snapshot, or a screenshot would settle the question
+  faster than reading source, this is the skill.
 allowed-tools: Bash(playwright-cli:*) Bash(npx:*) Bash(npm:*)
 ---
 
