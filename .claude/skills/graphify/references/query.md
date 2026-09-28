@@ -20,6 +20,15 @@ if not Path('graphify-out/graph.json').exists():
 ```
 If it fails, stop and tell the user to run `/graphify <path>` first.
 
+## Contents
+
+  - [Step 0 — Constrained query expansion (REQUIRED before traversal)](#step-0--constrained-query-expansion-required-before-traversal)
+  - [Step 1 — Traversal](#step-1--traversal)
+- [For /graphify path](#for-graphify-path)
+- [For /graphify explain](#for-graphify-explain)
+
+---
+
 ### Step 0 — Constrained query expansion (REQUIRED before traversal)
 
 graphify's `query` CLI matches nodes via case-folded substring + IDF — there is **no stemming, no synonyms, no cross-language match** inside the binary, and the inline fallback below matches the same way. If the user's question uses different language or different domain vocabulary than the graph's labels (user says "обработчик" / graph says "handler"; user says "authentication" / graph says "Guardian"), the literal matcher returns 0 hits and the answer collapses to noise.
@@ -180,15 +189,6 @@ Replace `ORIGINAL_QUESTION` with the user's verbatim question, `ANSWER` with you
 - `corrected` — the saved answer was wrong; `--correction` records what was right.
 
 At the **start** of graph work, refresh and read the lessons: run `graphify reflect --if-stale` (cheap, deterministic, no LLM; `--if-stale` makes it a no-op when `LESSONS.md` is already newer than every input, e.g. when the git hook just refreshed it), then read `graphify-out/reflections/LESSONS.md`. It lists **preferred sources** (start there), **known dead ends** (skip them), and prior **corrections**. Running `reflect` yourself keeps the lessons current even without the git hook installed; if the post-commit hook *is* installed, `--if-stale` means your session-start run costs almost nothing.
-
----
-
-## Contents
-
-  - [Step 0 — Constrained query expansion (REQUIRED before traversal)](#step-0--constrained-query-expansion-required-before-traversal)
-  - [Step 1 — Traversal](#step-1--traversal)
-- [For /graphify path](#for-graphify-path)
-- [For /graphify explain](#for-graphify-explain)
 
 ---
 
