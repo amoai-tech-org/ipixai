@@ -7,7 +7,7 @@ description: >
   review-comment troubleshooting, and post-merge proof. Defines the task standard; it does not
   replace task-verifier Done checks.
 metadata:
-  version: "1.13.0"
+  version: "1.14.0"
 ---
 
 # tasks — iPix Linear task specification standard
@@ -98,6 +98,10 @@ Opening a PR starts the review loop; it does not finish the task. After the PR o
 8. Repeat this loop after every push because comments, mergeability, base SHA, and checks can change.
 
 STOP before merge if an actionable thread is unresolved, a required check is red/pending, strict-main is stale, the PR/Linear task disagree materially, or auth/security/tenant/data/provider behavior is unverified for a touched boundary.
+
+## Post-merge local-main synchronization — mandatory before next task
+
+After a PR merges, complete the applicable post-merge proof in [post-merge.md](references/post-merge.md), then synchronize local `main` before creating the next task branch/worktree. The safe sequence is: fetch remote truth → inspect divergence → preserve any local-only commits → fast-forward local `main` only when safe → prove `main...origin/main = 0 0`. Never silently reset local-only work. Do not automatically rebase active feature branches merely because another PR merged; update them only when dependency, conflict, or strict-main policy requires it.
 
 At the Done gate, explicitly decide whether the change requires durable docs and/or a changelog entry:
 

@@ -20,6 +20,8 @@ live Linear task
 → exact-head PR review + CI
 → merge
 → exact-main post-merge proof
+→ synchronize local `main` with `origin/main`
+→ verify `main...origin/main = 0 0`
 → real-world certification when required
 → Linear 100% / Done
 ```
@@ -227,6 +229,7 @@ Rules: `.cursor/rules/`. Canonical skill source tree: `.agents/skills/`. Claude 
 - Review comments are hypotheses until verified against current code/runtime.
 - No unresolved BLOCKER/HIGH before merge.
 - Merge ≠ Done. Canonical post-merge rules: `.claude/skills/tasks/references/post-merge.md`.
+- After merge, safely synchronize local `main` with `origin/main` before creating the next task branch/worktree; preserve local-only commits first and never silently reset them.
 
 ## Linear task execution
 

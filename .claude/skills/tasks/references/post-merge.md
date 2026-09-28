@@ -12,6 +12,8 @@ PR merged
 → verify deployment/runtime
 → run task-specific smoke journey
 → run domain-specific proof
+→ synchronize local main with origin/main
+→ verify main...origin/main = 0 0
 → route residual risks
 → update Linear evidence/progress
 → 100% / Done
@@ -21,10 +23,28 @@ PR merged
 
 Post-merge verification starts immediately after merge, not "eventually." For a substantial task, complete the required checks below within **1 business day** of merge unless the task explicitly documents a longer window (e.g. waiting on a scheduled deploy). A merged PR with no post-merge evidence after that window is a stale task, not a done one — surface it, don't let it sit silently at "merged."
 
+## Local main synchronization gate
+
+After the merged-main proof is complete and **before creating the next task branch/worktree**, synchronize local `main` safely:
+
+```bash
+git fetch origin --prune
+git rev-list --left-right --count main...origin/main
+```
+
+Interpret the result as `<local-only> <remote-only>`:
+
+- `0 0` → PASS: local `main` already matches `origin/main`.
+- `0 N` → local `main` is only behind. Fast-forward it from the worktree that owns `main` with `git merge --ff-only origin/main`, then re-run the divergence check.
+- `N 0` or `N M` with local-only commits → **STOP**. Preserve those local-only commits on an appropriate branch/PR before synchronizing `main`; never silently reset or discard them.
+
+Do not automatically rebase active feature branches just because another PR merged. Update/rebase an active branch only when its dependency, conflict, or strict-main policy requires it.
+
 ## Required checks when applicable
 
 - [ ] PR merged into intended base and merge SHA recorded.
 - [ ] Current `origin/main` contains the intended change.
+- [ ] Local `main` is safely synchronized with `origin/main` before the next task starts (`git rev-list --left-right --count main...origin/main` → `0 0`).
 - [ ] Main/exact merged CI is green; inspect the actual workflow run/SHA per [github-actions.md](github-actions.md), not an earlier branch run.
 - [ ] Deployment completed successfully.
 - [ ] Required route/runtime is available without unexpected 401/403/404/5xx.
@@ -80,7 +100,7 @@ A local pass does not prove preview environment bindings; a preview pass does no
 ## Agent prompt
 
 ```text
-Verify the merged outcome rather than assuming merge means Done. Fetch current origin/main, record the merge/head SHA, confirm main CI and deployment health, then run the smallest production/runtime smoke journey that proves the task outcome. Complete required post-merge checks within 1 business day of merge unless the task explicitly documents a longer window; do not let a merged task sit un-verified indefinitely. Add domain-specific proof for Supabase, CopilotKit, Mastra, Cloudinary, auth/tenant, or UI when those areas changed. Route every residual risk to FIXED, NOT A PROBLEM with evidence, EXISTING LINEAR OWNER, or NEW LINEAR TASK REQUIRED. Update Linear with PR URL, merge SHA, CI/deploy/runtime evidence, and only set 100%/Done when all applicable post-merge checks pass.
+Verify the merged outcome rather than assuming merge means Done. Fetch current origin/main, record the merge/head SHA, confirm main CI and deployment health, then run the smallest production/runtime smoke journey that proves the task outcome. Before creating the next task branch/worktree, fetch with prune, inspect `main...origin/main`, preserve any local-only commits, fast-forward local `main` only when safe, and require `0 0`; do not automatically rebase unrelated active feature branches. Complete required post-merge checks within 1 business day of merge unless the task explicitly documents a longer window; do not let a merged task sit un-verified indefinitely. Add domain-specific proof for Supabase, CopilotKit, Mastra, Cloudinary, auth/tenant, or UI when those areas changed. Route every residual risk to FIXED, NOT A PROBLEM with evidence, EXISTING LINEAR OWNER, or NEW LINEAR TASK REQUIRED. Update Linear with PR URL, merge SHA, CI/deploy/runtime evidence, and only set 100%/Done when all applicable post-merge checks pass.
 ```
 
 ## Post-merge journey certification
