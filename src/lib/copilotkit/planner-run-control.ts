@@ -8,7 +8,7 @@ export type PlannerRunControlMessage =
   | { kind: "connect_ack"; requestId: string; runId: string; ownerInstanceId: string }
   | { kind: "stop"; requestId: string; runId: string }
   | { kind: "stop_ack"; requestId: string; runId: string; stopped: boolean; ownerInstanceId: string }
-  | { kind: "event"; runId: string; event: BaseEvent };
+  | { kind: "event"; runId: string; event: BaseEvent; replayFor?: string };
 
 export interface PlannerRunControlBus {
   send(message: PlannerRunControlMessage): Promise<void>;
@@ -36,7 +36,12 @@ export function isPlannerRunControlMessage(value: unknown): value is PlannerRunC
   }
   if (kind === "event") {
     const event = message.event;
-    return boundedString(message.runId) && !!event && typeof event === "object" && !Array.isArray(event) && boundedString((event as Record<string, unknown>).type, 128);
+    return boundedString(message.runId) &&
+      (message.replayFor === undefined || boundedString(message.replayFor, 128)) &&
+      !!event &&
+      typeof event === "object" &&
+      !Array.isArray(event) &&
+      boundedString((event as Record<string, unknown>).type, 128);
   }
   return false;
 }
@@ -179,16 +184,19 @@ export class PlannerRunControl {
           const firstDelivery = !connectRequests.has(message.requestId);
           connectRequests.add(message.requestId);
 
-          // On the first delivery, queue the active-run replay before the ACK.
-          // The controller buffers events until it receives the matching ACK,
-          // so connect() cannot resolve before all pre-connect events are ready
-          // for onEvent(). A racing publish is queued after this synchronous
-          // replay+ACK batch. Retries reuse requestId and therefore send only
-          // the ACK; already-delivered replay events are not duplicated.
+          // On the first delivery, queue replay events specifically for the
+          // controller that requested them before sending its ACK. Other
+          // controllers on the same thread ignore the tagged replay while
+          // untagged live events continue to fan out to all listeners.
           let response = Promise.resolve();
           if (firstDelivery) {
             for (const event of replayBuffer) {
-              response = enqueue({ kind: "event", runId, event });
+              response = enqueue({
+                kind: "event",
+                runId,
+                event,
+                replayFor: message.requestId,
+              });
             }
           }
           response = enqueue({
@@ -313,6 +321,7 @@ export class PlannerRunControl {
         return;
       }
       if (message.kind !== "event") return;
+      if (message.replayFor !== undefined && message.replayFor !== requestId) return;
       if (activeRunId && message.runId !== activeRunId) return;
       if (listeners.size === 0) {
         buffered.push({ runId: message.runId, event: message.event });
