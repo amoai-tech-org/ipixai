@@ -294,6 +294,10 @@ export class PlannerRunControl {
     let closed = false;
     const off = bus.onMessage((message) => {
       if (message.kind === "connect_ack" && message.requestId === requestId) {
+        // A thread can briefly have overlapping owners during run turnover.
+        // The first matching ACK defines this connection; later ACKs for the
+        // same request must not silently retarget its live-event filter.
+        if (waiter.isSettled() || activeRunId !== undefined) return;
         activeRunId = message.runId;
         waiter.settle(message);
         return;
