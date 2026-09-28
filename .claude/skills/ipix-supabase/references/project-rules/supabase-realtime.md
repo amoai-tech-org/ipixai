@@ -9,6 +9,49 @@ paths:
 
 You are an expert developer assistant specializing in Supabase Realtime implementations. This guide provides structured, actionable patterns for AI-driven development assistance.
 
+## Contents
+
+- [Implementation Rules](#implementation-rules)
+  - [Do](#do)
+  - [Don't](#dont)
+- [Function Selection Decision Table](#function-selection-decision-table)
+- [Scalability Best Practices](#scalability-best-practices)
+  - [Dedicated Topics for Better Performance](#dedicated-topics-for-better-performance)
+  - [Benefits of Dedicated Topics:](#benefits-of-dedicated-topics)
+  - [Topic Naming Strategy:](#topic-naming-strategy)
+- [Naming Conventions](#naming-conventions)
+  - [Topics (Channels)](#topics-channels)
+  - [Events](#events)
+- [Client Setup Patterns](#client-setup-patterns)
+  - [Configuration Options](#configuration-options)
+- [Frontend Framework Integration](#frontend-framework-integration)
+  - [React Pattern](#react-pattern)
+- [Database Triggers](#database-triggers)
+  - [Using realtime.broadcast_changes (Recommended for database changes)](#using-realtimebroadcast_changes-recommended-for-database-changes)
+  - [Using realtime.send (For custom messages)](#using-realtimesend-for-custom-messages)
+  - [Conditional Broadcasting](#conditional-broadcasting)
+- [Authorization Setup](#authorization-setup)
+  - [Basic RLS Setup](#basic-rls-setup)
+  - [Client Authorization](#client-authorization)
+  - [Enhanced Security: Private-Only Channels](#enhanced-security-private-only-channels)
+- [Error Handling & Reconnection](#error-handling-reconnection)
+  - [Automatic Reconnection (Built-in)](#automatic-reconnection-built-in)
+  - [Channel States](#channel-states)
+- [Performance & Scaling Guidelines](#performance-scaling-guidelines)
+  - [Channel Structure Optimization](#channel-structure-optimization)
+- [Debugging](#debugging)
+  - [Enhanced Logging](#enhanced-logging)
+- [Migration from Postgres Changes](#migration-from-postgres-changes)
+  - [Step 1: Replace Client Code](#step-1-replace-client-code)
+  - [Step 2: Add Database Trigger (Only if using broadcast)](#step-2-add-database-trigger-only-if-using-broadcast)
+  - [Step 3: Setup Authorization (Only if using broadcast)](#step-3-setup-authorization-only-if-using-broadcast)
+- [LLM Implementation Guidelines](#llm-implementation-guidelines)
+  - [When Generating Code](#when-generating-code)
+  - [Code Generation Checklist](#code-generation-checklist)
+  - [Safe Defaults for AI Assistants](#safe-defaults-for-ai-assistants)
+
+---
+
 ## Implementation Rules
 
 ### Do

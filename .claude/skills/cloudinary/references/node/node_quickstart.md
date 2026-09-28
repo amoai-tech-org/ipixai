@@ -35,6 +35,21 @@ This quick start lets you get an end-to-end implementation up and running using 
 > * If you aren't familiar with Cloudinary, you may want to first take a look at the [Developer Kickstart](dev_kickstart) for a hands-on, step-by-step introduction to Cloudinary features. You may also find our [Glossary](cloudinary_glossary) helpful to understand Cloudinary-specific terminology.
 > **TIP**: To start with full example apps, see [Node.js sample projects](node_sample_projects).
 
+## Contents
+
+- [1. Set up and configure the SDK](#1-set-up-and-configure-the-sdk)
+  - [Install the SDK](#install-the-sdk)
+  - [Set your API environment variable](#set-your-api-environment-variable)
+  - [Configure Cloudinary](#configure-cloudinary)
+- [2. Upload an image](#2-upload-an-image)
+- [3. Get and use details of the image](#3-get-and-use-details-of-the-image)
+- [4. Transform the image](#4-transform-the-image)
+- [5. Run your code](#5-run-your-code)
+- [View the completed code](#view-the-completed-code)
+- [Next steps](#next-steps)
+
+---
+
 ## 1. Set up and configure the SDK
 
 ### Install the SDK

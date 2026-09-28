@@ -183,6 +183,15 @@ At the **start** of graph work, refresh and read the lessons: run `graphify refl
 
 ---
 
+## Contents
+
+  - [Step 0 — Constrained query expansion (REQUIRED before traversal)](#step-0-constrained-query-expansion-required-before-traversal)
+  - [Step 1 — Traversal](#step-1-traversal)
+- [For /graphify path](#for-graphify-path)
+- [For /graphify explain](#for-graphify-explain)
+
+---
+
 ## For /graphify path
 
 Find the shortest path between two named concepts in the graph. Prefer the CLI when installed:

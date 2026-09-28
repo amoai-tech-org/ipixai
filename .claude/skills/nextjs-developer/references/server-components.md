@@ -1,5 +1,28 @@
 # React Server Components
 
+## Contents
+
+- [Server Components (Default)](#server-components-default)
+- [Benefits of Server Components](#benefits-of-server-components)
+- [Client Components](#client-components)
+- [When to Use Client Components](#when-to-use-client-components)
+- [Composition Pattern](#composition-pattern)
+- [Streaming with Suspense](#streaming-with-suspense)
+- [Parallel Data Fetching](#parallel-data-fetching)
+- [Sequential Data Fetching](#sequential-data-fetching)
+- [Preloading Data](#preloading-data)
+- [Server Component Patterns](#server-component-patterns)
+  - [Pattern: Layout with Data Fetching](#pattern-layout-with-data-fetching)
+  - [Pattern: Conditional Client Components](#pattern-conditional-client-components)
+  - [Pattern: Server Component with Client Island](#pattern-server-component-with-client-island)
+- [Context in Server/Client Components](#context-in-serverclient-components)
+- [Third-Party Components](#third-party-components)
+- [Edge Runtime](#edge-runtime)
+- [Quick Reference](#quick-reference)
+- [Best Practices](#best-practices)
+
+---
+
 ## Server Components (Default)
 
 ```tsx

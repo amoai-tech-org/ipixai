@@ -1,5 +1,29 @@
 # Data Fetching & Caching
 
+## Contents
+
+- [Extended fetch API](#extended-fetch-api)
+- [Cache Options](#cache-options)
+- [Revalidation Methods](#revalidation-methods)
+  - [Time-based Revalidation (ISR)](#time-based-revalidation-isr)
+  - [On-Demand Revalidation](#on-demand-revalidation)
+  - [Tag-based Revalidation](#tag-based-revalidation)
+- [Route Segment Config](#route-segment-config)
+- [Parallel Data Fetching](#parallel-data-fetching)
+- [Sequential Data Fetching](#sequential-data-fetching)
+- [Streaming with Suspense](#streaming-with-suspense)
+- [React cache for Deduplication](#react-cache-for-deduplication)
+- [Database Queries](#database-queries)
+- [Error Handling](#error-handling)
+- [Loading States](#loading-states)
+- [Client-Side Data Fetching](#client-side-data-fetching)
+- [Preloading Data](#preloading-data)
+- [Static Generation with Dynamic Routes](#static-generation-with-dynamic-routes)
+- [Quick Reference](#quick-reference)
+- [Best Practices](#best-practices)
+
+---
+
 ## Extended fetch API
 
 Next.js extends the native fetch with caching and revalidation options:

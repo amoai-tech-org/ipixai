@@ -20,6 +20,17 @@ This allows you to:
 
 ***
 
+## Contents
+
+- [Setup](#setup)
+  - [Running a model inference](#running-a-model-inference)
+- [Generate text embeddings](#generate-text-embeddings)
+- [Using Large Language Models (LLM)](#using-large-language-models-llm)
+- [Running locally](#running-locally)
+- [Deploying to production](#deploying-to-production)
+
+---
+
 ## Setup
 
 There are no external dependencies or packages to install to enable the API.

@@ -2,6 +2,38 @@
 
 Sequence diagrams show interactions between participants over time. They're ideal for API flows, authentication sequences, and system component interactions.
 
+## Contents
+
+- [Basic Syntax](#basic-syntax)
+- [Participants and Actors](#participants-and-actors)
+- [Message Types](#message-types)
+  - [Solid Arrow (Synchronous)](#solid-arrow-synchronous)
+  - [Open Arrow (Asynchronous)](#open-arrow-asynchronous)
+  - [Cross/X (Delete)](#crossx-delete)
+- [Activations](#activations)
+- [Alt/Else (Conditional Logic)](#altelse-conditional-logic)
+- [Opt (Optional)](#opt-optional)
+- [Par (Parallel)](#par-parallel)
+- [Loop](#loop)
+- [Break (Early Exit)](#break-early-exit)
+- [Notes](#notes)
+  - [Note over single participant](#note-over-single-participant)
+  - [Note spanning participants](#note-spanning-participants)
+  - [Right/Left notes](#rightleft-notes)
+- [Sequence Numbers](#sequence-numbers)
+- [Links and Tooltips](#links-and-tooltips)
+- [Comprehensive Example: User Authentication Flow](#comprehensive-example-user-authentication-flow)
+- [API Request/Response Example](#api-requestresponse-example)
+- [Microservices Communication](#microservices-communication)
+- [Best Practices](#best-practices)
+- [Common Use Cases](#common-use-cases)
+  - [Authentication](#authentication)
+  - [API Operations](#api-operations)
+  - [System Integration](#system-integration)
+  - [Business Processes](#business-processes)
+
+---
+
 ## Basic Syntax
 
 ```mermaid

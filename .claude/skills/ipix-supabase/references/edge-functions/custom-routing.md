@@ -30,6 +30,14 @@ To combine multiple endpoints into a single Edge Function, you can use web appli
 
 ***
 
+## Contents
+
+- [Basic routing example](#basic-routing-example)
+- [Using route parameters](#using-route-parameters)
+- [URL Patterns API](#url-patterns-api)
+
+---
+
 ## Basic routing example
 
 Here's a basic hello world example using some popular web frameworks:

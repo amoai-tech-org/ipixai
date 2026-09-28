@@ -8,6 +8,41 @@ version: 1.0.0
 
 This skill teaches agents how to create and deploy Supabase Edge Functions following best practices for Deno, TypeScript, authentication, and AI integration.
 
+## Contents
+
+- [When to Use](#when-to-use)
+- [Core Principles](#core-principles)
+  - [Deno Runtime](#deno-runtime)
+  - [Import Patterns](#import-patterns)
+  - [Shared Utilities](#shared-utilities)
+  - [Environment Variables](#environment-variables)
+- [Function Structure](#function-structure)
+  - [Basic Function Template](#basic-function-template)
+  - [CORS Handling](#cors-handling)
+  - [Authentication](#authentication)
+- [AI Integration](#ai-integration)
+  - [Gemini AI Setup](#gemini-ai-setup)
+  - [Structured Output Example](#structured-output-example)
+  - [URL Context for Enrichment](#url-context-for-enrichment)
+- [Database Connections](#database-connections)
+  - [Supabase Client](#supabase-client)
+- [File Operations](#file-operations)
+- [Routing with Hono or Express](#routing-with-hono-or-express)
+- [Background Tasks](#background-tasks)
+- [Error Handling](#error-handling)
+- [Deployment](#deployment)
+  - [Local Testing](#local-testing)
+  - [Deploy to Production](#deploy-to-production)
+- [Common Patterns](#common-patterns)
+  - [AI Agent Function Pattern](#ai-agent-function-pattern)
+  - [Cost Tracking Pattern](#cost-tracking-pattern)
+- [Best Practices](#best-practices)
+  - [✅ DO](#do)
+  - [❌ DON'T](#dont)
+- [Reference](#reference)
+
+---
+
 ## When to Use
 
 - When creating serverless functions on Supabase

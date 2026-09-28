@@ -25,6 +25,14 @@ The Cloudinary Node.js SDK provides simple, yet comprehensive image and video up
 
 We recently released an enhanced security version of this SDK that improves the validation and handling of input parameters. We recommend upgrading to the [latest version][changelog-link] of the SDK to benefit from these security improvements.
 
+## Contents
+
+- [How would you like to learn?](#how-would-you-like-to-learn)
+- [Install](#install)
+- [Configure](#configure)
+
+---
+
 ## How would you like to learn?
 
 {table:class=no-borders overview}Resource | Description 

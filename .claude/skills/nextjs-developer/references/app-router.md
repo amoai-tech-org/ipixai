@@ -1,5 +1,24 @@
 # App Router Architecture
 
+## Contents
+
+- [File-Based Routing](#file-based-routing)
+- [Root Layout (Required)](#root-layout-required)
+- [Nested Layouts](#nested-layouts)
+- [Templates (Re-mount on Navigation)](#templates-re-mount-on-navigation)
+- [Loading States](#loading-states)
+- [Error Boundaries](#error-boundaries)
+- [Route Groups](#route-groups)
+- [Parallel Routes](#parallel-routes)
+- [Intercepting Routes](#intercepting-routes)
+- [Dynamic Routes](#dynamic-routes)
+- [Catch-All Routes](#catch-all-routes)
+- [Route Handlers (API Routes)](#route-handlers-api-routes)
+- [Metadata API](#metadata-api)
+- [Quick Reference](#quick-reference)
+
+---
+
 ## File-Based Routing
 
 ```
