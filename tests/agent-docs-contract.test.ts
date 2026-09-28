@@ -67,9 +67,12 @@ function referencedPaths(source: string): string[] {
 
   // Markdown links to repository files: [text](docs/thing.md)
   for (const match of source.match(/\]\(([^)]+)\)/g) ?? []) {
-    const value = match.slice(2, -1);
-    if (value.startsWith("http") || value.startsWith("#")) continue;
+    const rawValue = match.slice(2, -1);
+    if (rawValue.startsWith("http") || rawValue.startsWith("#")) continue;
+    const value = rawValue.split("#")[0].replace(/^\.\//, "");
+    if (!value) continue;
     if (TRACKED_PREFIXES.some((prefix) => value.startsWith(prefix))) found.add(value);
+    if ((BARE_FILES as readonly string[]).includes(value)) found.add(value);
   }
 
   return [...found].filter(
@@ -78,6 +81,14 @@ function referencedPaths(source: string): string[] {
 }
 
 describe("IPI-1370 AGENT-DOCS-001: agent contract files describe the real repository", () => {
+  it("normalizes local Markdown link fragments and ./ prefixes before validation", () => {
+    const refs = referencedPaths(
+      "[rules](AGENTS.md#rules) [layout](./src/app/layout.tsx#metadata)",
+    );
+    expect(refs).toContain("AGENTS.md");
+    expect(refs).toContain("src/app/layout.tsx");
+  });
+
   it.each(DOCS)(
     "%s references only existing paths, for the inline-code and relative-link forms it scans",
     (doc) => {
@@ -185,6 +196,14 @@ describe("IPI-1370 AGENT-DOCS-001: agent contract files describe the real reposi
     expect(agents).toContain("For full Supabase proofs");
     expect(agents).toContain("For Mastra/Postgres-only proofs");
     expect(agents).not.toContain("Default writes: **disposable Postgres");
+  });
+
+  it("documents accidental credential exposure recovery", () => {
+    const agents = read("AGENTS.md");
+    expect(agents).toContain("treat it as compromised");
+    expect(agents).toContain("revoke or rotate it with the provider immediately");
+    expect(agents).toContain("notify the human repository owner/security contact");
+    expect(agents).toContain("Removing the text alone is not remediation");
   });
 
   it("documents the npm test gate and the vitest bypass", () => {
