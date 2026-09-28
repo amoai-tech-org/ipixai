@@ -85,10 +85,13 @@ PR work is complete only when:
 - invalid/stale/out-of-scope/noise findings are resolved with evidence or ownership
 - exact-head CI is green
 - no unresolved blocker thread remains
+- the PR body's pre-merge checklist has been reviewed and updated so every tick reflects verified evidence at the current head (no stale or assumed ticks)
+- the PR body's success criteria have been reviewed and updated against that same evidence, with unprovable or descoped criteria marked explicitly rather than deleted
+- **explicit human approval for the exact current head SHA is recorded** — this is a hard gate; an agent never performs the merge itself (see `AGENTS.md` § PR instructions → Merge authority)
 - post-merge checks are defined before merge
 
 ## Agent prompt
 
 ```text
-Prepare or troubleshoot this PR as part of the same Linear task. Re-read the task goal/DoD, inspect the exact diff versus current base, run the pre-commit and pre-merge gates, and verify every changed file belongs to scope. Build a reviewer-friendly PR body with outcome, architecture/reuse decisions, security/tenant impact, exact verification, reviewer fast path, non-goals, and post-merge checks. Inventory every substantive review thread, classify each before editing, route uncertain claims through the owning skill/MCP/official source, apply the smallest verified fix, rerun targeted proof, reply with evidence, and resolve only after proof. Before acting on any bot-reported finding, follow task-verifier/SKILL.md's bot-recheck procedure: re-fetch the exact file at the current head and confirm the finding still holds. Do not merge until current-head required checks are green and no blocker remains.
+Prepare or troubleshoot this PR as part of the same Linear task. Re-read the task goal/DoD, inspect the exact diff versus current base, run the pre-commit and pre-merge gates, and verify every changed file belongs to scope. Build a reviewer-friendly PR body with outcome, architecture/reuse decisions, security/tenant impact, exact verification, reviewer fast path, non-goals, and post-merge checks. Inventory every substantive review thread, classify each before editing, route uncertain claims through the owning skill/MCP/official source, apply the smallest verified fix, rerun targeted proof, reply with evidence, and resolve only after proof. Before acting on any bot-reported finding, follow task-verifier/SKILL.md's bot-recheck procedure: re-fetch the exact file at the current head and confirm the finding still holds. You may prepare the PR fully, but you must never merge it: merging requires current-head required checks green, no blocker thread, the PR checklist and success criteria reviewed and updated against verified evidence at that exact head, and explicit human approval for that same head SHA. Green CI is the precondition for asking, not a substitute for approval.
 ```
