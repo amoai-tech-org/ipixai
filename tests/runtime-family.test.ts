@@ -303,12 +303,22 @@ describe("documented runtime pins match the installed family (IPI-1368)", () => 
   ] as const;
 
   it("the canonical table matches every installed family package", () => {
-    const table = read("docs/mastra/runtime-family.md");
+    // Parse the table row by row rather than building one pattern per package.
+    // Structural parsing cannot be confused by a regex metacharacter in a package
+    // name, and no pattern is ever constructed from data.
+    const rows = new Map<string, string>();
+    for (const line of read("docs/mastra/runtime-family.md").split("\n")) {
+      const cells = line.split("|").map((cell) => cell.trim());
+      if (cells.length < 4) continue;
+      const nameCell = cells[1] ?? "";
+      const versionCell = cells[2] ?? "";
+      if (!nameCell.startsWith("`") || !nameCell.endsWith("`")) continue;
+      if (!/^[0-9]/.test(versionCell)) continue;
+      rows.set(nameCell.slice(1, -1), versionCell);
+    }
     const mismatched = FAMILY.flatMap((name) => {
-      const escaped = name.replace(/[/@]/g, "\\$&");
-      const row = new RegExp(`\\|\\s*\`${escaped}\`\\s*\\|\\s*([0-9][^\\s|]*)\\s*\\|`).exec(table);
       const installed = installedVersion(name);
-      const documented = row?.[1];
+      const documented = rows.get(name);
       if (documented === undefined) return [{ name, documented: "(no row)", installed }];
       return documented === installed ? [] : [{ name, documented, installed }];
     });
@@ -339,12 +349,26 @@ describe("documented runtime pins match the installed family (IPI-1368)", () => 
       ["docs/prd.md", sectionUnder(read("docs/prd.md"), "### 1.2 Stack truth (this repo)")],
       ["github/mastra/mastra-repos.md", preambleOf(read("github/mastra/mastra-repos.md"))],
     ];
+    // One static pattern, applied to a window sliced around each occurrence of the
+    // label, so no pattern is built from the data being checked. Every occurrence
+    // is examined, not just the first: a pin can be restated anywhere in the
+    // region, and checking only the first mention let an injected one through.
+    const BACKTICKED_VERSION = /`(\d+\.\d+\.\d+)`/;
     const restated = regions.flatMap(([path, text]) =>
       labelled.flatMap(([label, installed]) => {
-        const near = new RegExp(
-          `${label.replace(/[/@.]/g, "\\$&")}[^\\n]{0,24}?\`(\\d+\\.\\d+\\.\\d+)\``,
-        ).exec(text);
-        const documented = near?.[1];
+        let from = 0;
+        let documented: string | undefined;
+        while (documented === undefined) {
+          const at = text.indexOf(label, from);
+          if (at === -1) break;
+          const lineEnd = text.indexOf("\n", at);
+          const windowEnd = Math.min(
+            lineEnd === -1 ? text.length : lineEnd,
+            at + label.length + 24,
+          );
+          documented = BACKTICKED_VERSION.exec(text.slice(at + label.length, windowEnd))?.[1];
+          from = at + label.length;
+        }
         return documented === undefined ? [] : [{ path, label, documented, installed }];
       }),
     );
