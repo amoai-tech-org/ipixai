@@ -15,14 +15,15 @@ import { pathToFileURL } from "node:url";
  * none of them may be reported as "no 5xx". The workflow previously piped
  * `vercel logs` through `|| true`, which turned a failed query into a pass.
  *
- * `vercel logs` returns the newest `--limit` entries and applies `--since` /
- * `--until` to that fetched set, so the limit silently decides the real window.
- * Measured on 2026-09-28: `--limit 50` returned 50 entries and `--limit 5000`
- * returned 5000 for the same requested range. Because that fetch keeps the
- * NEWEST entries and the journey is the newest activity, reaching the ceiling
- * drops pre-journey traffic rather than the journey: `--limit` is passed in and
- * reported as a warning, while the thread-id match below is the hard proof that
- * the window contains this run.
+ * `vercel logs` returns the newest `--limit` entries, so the limit decides the
+ * real window. Measured on 2026-09-28: `--limit 50` returned 50 entries and
+ * `--limit 5000` returned 5000 for the same requested range, while `--limit
+ * 20000` returned 6950 for a window where 5000 had returned 5000 — so the
+ * ceiling genuinely truncates. Reaching it is reported as a warning, because
+ * volume alone does not say whether the JOURNEY was covered: a real run hit the
+ * ceiling while still scanning from 791 ms before its first request. Coverage is
+ * gated separately and precisely — the certification trace records when its
+ * first CopilotKit request went out, and the scan must reach back before it.
  *
  * Why the certification's own thread id is required: Production is live, so
  * `/api/copilotkit` traffic exists whether or not this journey ran. Measured on
@@ -34,6 +35,15 @@ import { pathToFileURL } from "node:url";
  */
 
 const COPILOTKIT_PATH = /\/api\/copilotkit/;
+
+/**
+ * Slack allowed between the browser stamping its first request and the provider
+ * logging it. The log entry is written after the request arrives, so the entry
+ * timestamp is normally LATER than the browser's `Date.now()`; this tolerance
+ * covers clock skew between the CI runner and Vercel, which would otherwise make
+ * a complete scan look like it started slightly too late.
+ */
+const CLOCK_SKEW_TOLERANCE_MS = 2_000;
 
 /**
  * `vercel logs --json` emits `responseStatusCode` / `requestPath` (verified
@@ -95,29 +105,51 @@ function findCertThreadHits(entries, certThreadIds) {
 }
 
 /**
+ * The certification trace: its thread ids, plus when its first CopilotKit
+ * request went out (used to prove the scanned window reaches back before the
+ * journey started).
+ *
  * @param {string} rawTraceText
- * @returns {string[]} lowercased thread ids, or `[]` when the trace is unusable
+ * @returns {{ threadIds: string[], firstCopilotkitRequestAtMs: number | null }}
  */
-export function readCertThreadIdsFromTrace(rawTraceText) {
+export function readCertTrace(rawTraceText) {
   let parsed;
   try {
     parsed = JSON.parse(String(rawTraceText ?? ""));
   } catch {
-    return [];
+    return { threadIds: [], firstCopilotkitRequestAtMs: null };
   }
+
   const ids = parsed?.threadIds;
-  if (!Array.isArray(ids)) return [];
-  return ids
-    .filter((id) => typeof id === "string" && id.trim() !== "")
-    .map((id) => id.trim().toLowerCase());
+  const first = parsed?.firstCopilotkitRequestAtMs;
+  return {
+    threadIds: Array.isArray(ids)
+      ? ids
+          .filter((id) => typeof id === "string" && id.trim() !== "")
+          .map((id) => id.trim().toLowerCase())
+      : [],
+    firstCopilotkitRequestAtMs: typeof first === "number" && Number.isFinite(first) ? first : null,
+  };
+}
+
+/**
+ * @param {string} rawTraceText
+ * @returns {string[]} lowercased thread ids, or `[]` when the trace is unusable
+ */
+export function readCertThreadIdsFromTrace(rawTraceText) {
+  return readCertTrace(rawTraceText).threadIds;
 }
 
 /**
  * @param {string} rawText raw `vercel logs --json` output (JSON Lines)
- * @param {{ certThreadIds?: string[] }} [options] the certification's own thread
- *   ids; when supplied, at least one must appear or the verdict fails
+ * @param {{ certThreadIds?: string[], firstCertRequestAtMs?: number | null }} [options]
+ *   the certification's own thread ids (at least one must appear) and the epoch
+ *   ms of its first CopilotKit request (the scan must reach back before it)
  */
-export function analyzePlannerProductionLogs(rawText, { certThreadIds = [] } = {}) {
+export function analyzePlannerProductionLogs(
+  rawText,
+  { certThreadIds = [], firstCertRequestAtMs = null } = {},
+) {
   const lines = String(rawText ?? "")
     .split("\n")
     .filter((line) => line.trim() !== "");
@@ -174,6 +206,7 @@ export function analyzePlannerProductionLogs(rawText, { certThreadIds = [] } = {
     // "ids were required and none matched".
     certThreadIdsChecked: certThreadIds.length,
     certThreadHits: findCertThreadHits(entries, certThreadIds),
+    certFirstRequestAtMs: firstCertRequestAtMs,
   };
 }
 
@@ -217,15 +250,29 @@ export function evaluatePlannerProductionLogs(summary, { maxEntries = null } = {
     );
   }
 
-  // Reported, not gated. `vercel logs` returns the newest `--limit` entries, so
-  // reaching the ceiling drops the OLDEST entries, not the journey — and the
-  // thread-id guard above independently proves the journey is inside the window.
-  // Failing here would reject a window that demonstrably contains the
-  // certification, so this is a visible warning instead.
+  // Coverage, gated. Hitting the `--limit` ceiling means the OLDEST entries were
+  // dropped, but that alone says nothing about whether the JOURNEY was covered:
+  // measured on 2026-09-28 a real certification run hit the 5000 ceiling while
+  // still scanning from 2026-09-28T01:22:02.072Z — 791 ms BEFORE its first
+  // `/api/copilotkit` request at 01:22:02.863Z — so failing on volume would have
+  // rejected a run whose coverage was complete. What actually matters is whether
+  // the scan reaches back before the journey began; if it does not, an early
+  // `/run` 5xx could have been dropped and the pass would be unsound.
+  if (
+    summary.certFirstRequestAtMs !== null &&
+    summary.windowStartMs !== null &&
+    summary.windowStartMs > summary.certFirstRequestAtMs + CLOCK_SKEW_TOLERANCE_MS
+  ) {
+    problems.push(
+      `the scan starts at ${new Date(summary.windowStartMs).toISOString()}, after the certification's first /api/copilotkit request at ${new Date(summary.certFirstRequestAtMs).toISOString()}, so the beginning of the journey was truncated and an earlier 5xx could have been missed`,
+    );
+  }
+
+  // Reported, not gated: the ceiling was reached but coverage is proven above.
   const warnings = [];
   if (maxEntries !== null && summary.totalLines >= maxEntries) {
     warnings.push(
-      `the scan returned ${summary.totalLines} entr(ies) at the --limit ${maxEntries} ceiling, so older entries were dropped; the journey is still covered because its thread id was matched`,
+      `the scan returned ${summary.totalLines} entr(ies) at the --limit ${maxEntries} ceiling, so entries older than ${summary.windowStartMs === null ? "<unknown>" : new Date(summary.windowStartMs).toISOString()} were dropped; coverage of the journey itself is proven by the checks above`,
     );
   }
 
@@ -268,16 +315,16 @@ export function runPlannerProductionLogCheck({
     return { exitCode: 2, summary: null };
   }
 
-  let certThreadIds;
+  let trace;
   try {
-    certThreadIds = readCertThreadIdsFromTrace(readFile(traceFile));
+    trace = readCertTrace(readFile(traceFile));
   } catch (cause) {
     error(
       `::error title=Planner production log check failed::the certification trace at ${traceFile} could not be read: ${cause instanceof Error ? cause.message : String(cause)}`,
     );
     return { exitCode: 2, summary: null };
   }
-  if (certThreadIds.length === 0) {
+  if (trace.threadIds.length === 0) {
     error(
       `::error title=Planner production log check misconfigured::the certification trace at ${traceFile} contains no thread ids, so the scanned window cannot be tied to this run`,
     );
@@ -291,7 +338,10 @@ export function runPlannerProductionLogCheck({
 
   let summary;
   try {
-    summary = analyzePlannerProductionLogs(readFile(logFile), { certThreadIds });
+    summary = analyzePlannerProductionLogs(readFile(logFile), {
+      certThreadIds: trace.threadIds,
+      firstCertRequestAtMs: trace.firstCopilotkitRequestAtMs,
+    });
   } catch (cause) {
     error(
       `::error title=Planner production log check failed::${cause instanceof Error ? cause.message : String(cause)}`,

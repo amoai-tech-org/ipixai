@@ -73,16 +73,22 @@ describe("certification trace", () => {
     expect(trace.ids()).toEqual([]);
   });
 
-  it("writes only thread ids, creating the directory it needs", () => {
+  it("writes only thread ids and the journey's start stamp, creating the directory it needs", () => {
     const { page, emit } = fakePage();
     const trace = collectCertThreadIds(page);
     emit(`https://www.ipix.co/api/copilotkit/agent/default/stop/${REAL_THREAD_ID}`);
 
     const file = tempFile();
-    expect(trace.write(file)).toEqual({ threadIds: [REAL_THREAD_ID] });
+    const written = trace.write(file) as {
+      threadIds: string[];
+      firstCopilotkitRequestAtMs: number | null;
+    };
 
-    const written = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
-    expect(written).toEqual({ threadIds: [REAL_THREAD_ID] });
+    expect(written.threadIds).toEqual([REAL_THREAD_ID]);
+    // The Stop request is itself a CopilotKit request, so it also stamps the
+    // journey's start — the value the log check uses to prove scan coverage.
+    expect(typeof written.firstCopilotkitRequestAtMs).toBe("number");
+    expect(JSON.parse(fs.readFileSync(file, "utf8"))).toEqual(written);
   });
 
   it("writes an empty trace rather than failing when no thread was named", () => {
@@ -91,8 +97,50 @@ describe("certification trace", () => {
 
     // The spec asserts the count itself, so the writer stays honest here instead
     // of inventing an id or throwing mid-journey.
-    expect(collectCertThreadIds(page).write(file)).toEqual({ threadIds: [] });
-    expect(JSON.parse(fs.readFileSync(file, "utf8"))).toEqual({ threadIds: [] });
+    const empty = { threadIds: [], firstCopilotkitRequestAtMs: null };
+    expect(collectCertThreadIds(page).write(file)).toEqual(empty);
+    expect(JSON.parse(fs.readFileSync(file, "utf8"))).toEqual(empty);
+  });
+
+  it("stamps the first CopilotKit request once and keeps the earliest stamp", () => {
+    const { page, emit } = fakePage();
+    const trace = collectCertThreadIds(page);
+
+    expect(trace.firstRequestAtMs()).toBeNull();
+    emit("https://www.ipix.co/app");
+    expect(trace.firstRequestAtMs(), "non-CopilotKit traffic must not stamp the journey").toBeNull();
+
+    emit("https://www.ipix.co/api/copilotkit/info");
+    const first = trace.firstRequestAtMs();
+    expect(typeof first).toBe("number");
+
+    emit("https://www.ipix.co/api/copilotkit/agent/default/run");
+    expect(trace.firstRequestAtMs(), "only the first request stamps the journey").toBe(first);
+  });
+
+  // `CERT_TRACE_FILE` is workflow-controlled, so this is defence in depth: an
+  // environment variable that reaches `fs.writeFileSync` should not be able to
+  // place a file anywhere on the machine.
+  it("refuses to write the trace outside the workspace or the temp directory", () => {
+    const { page } = fakePage();
+    const outside = path.join(
+      path.parse(process.cwd()).root,
+      "ipix-cert-trace-must-not-be-written.json",
+    );
+
+    expect(() => collectCertThreadIds(page).write(outside)).toThrow(
+      /refusing to write the certification trace/,
+    );
+    expect(fs.existsSync(outside)).toBe(false);
+  });
+
+  it("resolves traversal before checking containment, so ../ cannot smuggle a path out", () => {
+    const { page } = fakePage();
+    const outside = path.join(path.parse(process.cwd()).root, "ipix-traversal.json");
+
+    expect(() => collectCertThreadIds(page).write(path.relative(process.cwd(), outside))).toThrow(
+      /refusing to write the certification trace/,
+    );
   });
 
   it("uses the configured trace path and falls back to the Playwright output dir", () => {

@@ -210,11 +210,14 @@ jobs:
           # step passed without verifying anything.
           #
           # Bound the query to the journey. Measured on 2026-09-28: `vercel logs`
-          # applies --since/--until to the newest --limit entries rather than
-          # streaming a range, so this window — not the default 100 — is what
-          # decides how much real time is covered. `PROD_LOG_LIMIT` is handed to
-          # the checker, which fails if the result reaches the ceiling because a
-          # truncated window may not contain the journey.
+          # returns at most --limit entries, keeping the newest, so that ceiling
+          # — not the default 100 — decides how much real time is covered
+          # (`--limit 5000` returned 5000 entries where `--limit 20000` returned
+          # 6950 for the same window). `PROD_LOG_LIMIT` is handed to the checker,
+          # which reports reaching the ceiling as a warning and gates instead on
+          # whether the scan reaches back before the journey's first CopilotKit
+          # request — the trace records when that was, so a truncated scan that
+          # could have dropped an early 5xx fails rather than passing on volume.
           vercel logs "$DEPLOYMENT_URL" --json \
             --since "$CERT_STARTED_AT" \
             --until "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { Page } from "@playwright/test";
 
@@ -40,6 +41,21 @@ const STOP_THREAD_ID = /\/agent\/[^/]+\/stop\/([^/?#]+)/;
 const THREAD_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
+ * Any CopilotKit request, used to stamp the journey's first call.
+ *
+ * `vercel logs` returns the NEWEST `--limit` entries, so a busy window can drop
+ * the OLDEST ones. Measured on 2026-09-28: `--limit 5000` returned 5000 entries
+ * and `--limit 20000` returned 6950 for the same window, so the ceiling really
+ * does truncate. The log check compares this timestamp against the earliest
+ * entry it scanned to prove the scan reaches back before the journey started,
+ * which is the only reliable way to know an early 5xx could not have been
+ * dropped. A thread id alone would not prove that: the Stop calls are among the
+ * journey's LAST requests, so a scan could contain them and still have missed an
+ * earlier `/run`.
+ */
+const COPILOTKIT_REQUEST = /\/api\/copilotkit/;
+
+/**
  * Default trace location. Sits under Playwright's `test-results` output
  * directory, which the repository already gitignores, and is written during the
  * run and read by the following workflow step.
@@ -56,19 +72,55 @@ export function certTraceFile(env: Record<string, string | undefined> = process.
 export interface CertTrace {
   /** Thread ids observed so far, lowercased and de-duplicated. */
   ids: () => string[];
-  /** Persists the ids and returns what was written. */
-  write: (file?: string) => { threadIds: string[] };
+  /** Epoch ms of the first `/api/copilotkit` request seen, or null. */
+  firstRequestAtMs: () => number | null;
+  /** Persists the trace and returns what was written. */
+  write: (file?: string) => { threadIds: string[]; firstCopilotkitRequestAtMs: number | null };
 }
 
 /**
- * Records the thread ids this page's requests name. Call once per page, before
- * the journey starts, so no Stop request can be missed.
+ * Roots the trace may be written under: the workspace, or the temp directory the
+ * unit tests use.
+ *
+ * `CERT_TRACE_FILE` is set by the certification workflow, so this is defence in
+ * depth rather than a live attack path — but an unconstrained environment
+ * variable that reaches `fs.writeFileSync` should not be able to place a file
+ * anywhere on the machine. Paths are compared AFTER `path.resolve`, so `../`
+ * segments are neutralised rather than pattern-matched.
+ */
+function allowedTraceRoots(): string[] {
+  return [path.resolve(process.cwd()), path.resolve(os.tmpdir())];
+}
+
+function resolveTraceTarget(file: string): string {
+  const target = path.resolve(file);
+  const permitted = allowedTraceRoots().some(
+    (root) => target === root || target.startsWith(root + path.sep),
+  );
+  if (!permitted) {
+    throw new Error(
+      `refusing to write the certification trace outside the workspace or the temp directory: ${target}`,
+    );
+  }
+  return target;
+}
+
+/**
+ * Records the thread ids this page's requests name, and when its first
+ * CopilotKit request went out. Call once per page, before the journey starts, so
+ * neither can be missed.
  */
 export function collectCertThreadIds(page: Page): CertTrace {
   const threadIds = new Set<string>();
+  let firstRequestAtMs: number | null = null;
 
   page.on("request", (request) => {
-    const match = STOP_THREAD_ID.exec(request.url());
+    const url = request.url();
+    if (firstRequestAtMs === null && COPILOTKIT_REQUEST.test(url)) {
+      firstRequestAtMs = Date.now();
+    }
+
+    const match = STOP_THREAD_ID.exec(url);
     if (!match) return;
     const id = match[1].toLowerCase();
     if (THREAD_ID_SHAPE.test(id)) threadIds.add(id);
@@ -78,11 +130,13 @@ export function collectCertThreadIds(page: Page): CertTrace {
 
   return {
     ids,
+    firstRequestAtMs: () => firstRequestAtMs,
     write(file = certTraceFile()) {
-      const target = path.resolve(file);
+      const target = resolveTraceTarget(file);
+      const payload = { threadIds: ids(), firstCopilotkitRequestAtMs: firstRequestAtMs };
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, `${JSON.stringify({ threadIds: ids() }, null, 2)}\n`);
-      return { threadIds: ids() };
+      fs.writeFileSync(target, `${JSON.stringify(payload, null, 2)}\n`);
+      return payload;
     },
   };
 }

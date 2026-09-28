@@ -4,6 +4,7 @@ import {
   analyzePlannerProductionLogs,
   evaluatePlannerProductionLogs,
   readCertThreadIdsFromTrace,
+  readCertTrace,
   runPlannerProductionLogCheck,
 } from "../scripts/check-planner-production-logs.mjs";
 
@@ -199,6 +200,68 @@ describe("planner production log check", () => {
     expect(analyzePlannerProductionLogs("{}").windowStartMs).toBeNull();
   });
 
+  // Coverage is gated precisely rather than by volume. Hitting the ceiling alone
+  // says nothing about the journey: a real certification run on 2026-09-28 hit
+  // the 5000 ceiling while still scanning from 791 ms BEFORE its first request,
+  // so failing on volume would have rejected a run that was fully covered. What
+  // matters is whether the scan reaches back before the journey began — if it
+  // does not, an early `/run` 5xx could have been dropped.
+  describe("scan coverage of the journey", () => {
+    const FIRST_REQUEST = 1790552958225;
+
+    it("fails when the scan starts after the certification's first request", () => {
+      const summary = analyzePlannerProductionLogs(
+        asJsonLines([vercelLogEntry({ timestamp: FIRST_REQUEST + 60_000 })]),
+        { certThreadIds: [CERT_THREAD_ID], firstCertRequestAtMs: FIRST_REQUEST },
+      );
+
+      const verdict = evaluatePlannerProductionLogs(summary);
+      expect(verdict.ok).toBe(false);
+      expect(verdict.problems.join(" ")).toContain("truncated");
+    });
+
+    it("passes when the scan reaches back before the first request", () => {
+      const summary = analyzePlannerProductionLogs(
+        asJsonLines([vercelLogEntry({ timestamp: FIRST_REQUEST - 791 })]),
+        { certThreadIds: [CERT_THREAD_ID], firstCertRequestAtMs: FIRST_REQUEST },
+      );
+
+      expect(evaluatePlannerProductionLogs(summary).ok).toBe(true);
+    });
+
+    it("tolerates clock skew between the runner and the provider", () => {
+      const summary = analyzePlannerProductionLogs(
+        asJsonLines([vercelLogEntry({ timestamp: FIRST_REQUEST + 1_500 })]),
+        { certThreadIds: [CERT_THREAD_ID], firstCertRequestAtMs: FIRST_REQUEST },
+      );
+
+      expect(evaluatePlannerProductionLogs(summary).ok).toBe(true);
+    });
+
+    it("skips the coverage gate when the trace predates the stamp", () => {
+      const summary = analyzePlannerProductionLogs(
+        asJsonLines([vercelLogEntry({ timestamp: FIRST_REQUEST + 60_000 })]),
+        { certThreadIds: [CERT_THREAD_ID] },
+      );
+
+      expect(summary.certFirstRequestAtMs).toBeNull();
+      expect(evaluatePlannerProductionLogs(summary).ok).toBe(true);
+    });
+  });
+
+  it("reads the first-request stamp from the trace and rejects junk", () => {
+    expect(readCertTrace(traceJson()).firstCopilotkitRequestAtMs).toBeNull();
+    expect(
+      readCertTrace(JSON.stringify({ threadIds: [], firstCopilotkitRequestAtMs: 123 }))
+        .firstCopilotkitRequestAtMs,
+    ).toBe(123);
+    expect(
+      readCertTrace(JSON.stringify({ threadIds: [], firstCopilotkitRequestAtMs: "nope" }))
+        .firstCopilotkitRequestAtMs,
+    ).toBeNull();
+    expect(readCertTrace("not json").firstCopilotkitRequestAtMs).toBeNull();
+  });
+
   it("reads thread ids from the certification trace and rejects junk", () => {
     expect(readCertThreadIdsFromTrace(traceJson())).toEqual([CERT_THREAD_ID]);
     expect(readCertThreadIdsFromTrace(traceJson([CERT_THREAD_ID.toUpperCase()]))).toEqual([
@@ -304,6 +367,22 @@ describe("planner production log check", () => {
       const { result, log } = run(asJsonLines([vercelLogEntry()]), { env: { PROD_LOG_LIMIT: "1" } });
       expect(result.exitCode).toBe(0);
       expect(log.mock.calls.flat().join(" ")).toContain("::warning::");
+    });
+
+    it("exits 1 when the scan starts after the certification's first request", () => {
+      const firstRequest = 1790552958225;
+      const { result, error } = run(
+        asJsonLines([vercelLogEntry({ timestamp: firstRequest + 60_000 })]),
+        {
+          traceText: `${JSON.stringify({
+            threadIds: [CERT_THREAD_ID],
+            firstCopilotkitRequestAtMs: firstRequest,
+          })}\n`,
+        },
+      );
+
+      expect(result.exitCode).toBe(1);
+      expect(error.mock.calls.flat().join(" ")).toContain("truncated");
     });
 
     it("warns about non-copilotkit 5xx while still passing", () => {
