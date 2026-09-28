@@ -85,35 +85,33 @@ function isIpixOverlay(front) {
 
 /** Deterministic hash of a directory tree: sorted `relpath\0base64(bytes)`, newline-joined. */
 export function hashTree(dir) {
-  const entries = [];
+  const paths = [];
   const walk = (current) => {
     for (const name of readdirSync(current).sort()) {
       const full = join(current, name);
       if (statSync(full).isDirectory()) {
         walk(full);
       } else {
-        const rel = relative(dir, full).split(sep).join("/");
-        entries.push({ rel, bytes: readFileSync(full) });
+        paths.push(relative(dir, full).split(sep).join("/"));
       }
     }
   };
   walk(dir);
 
-  // Feed the digest incrementally instead of joining every entry into one string
-  // first. The previous form held a second, base64-inflated copy of the whole tree
-  // in memory and was bounded by V8's maximum string length; this form is bounded
-  // by the largest single file. The byte stream is identical — `relpath\0`,
-  // then `base64(bytes)`, entries joined with newlines — so existing hashes do not
-  // move, which the check against the committed baseline confirms.
+  // Collect the paths first, then read and feed one file at a time, so peak memory
+  // is the largest single file rather than the whole tree. The earlier form held
+  // every file's contents, and before that a second base64-inflated copy of the
+  // entire tree joined into one string bounded by V8's maximum string length.
   //
-  // Base64 is kept deliberately: switching to raw buffers would change every hash
-  // for no functional gain, and the memory concern was the whole-tree string
-  // rather than the per-file encoding.
+  // Base64 is kept deliberately: hashing raw buffers would change every committed
+  // hash for no functional gain, and the concern was holding the whole tree, not
+  // the encoding. The byte stream is identical, so `skills:vendor:check` still
+  // matches the committed baseline.
   const hash = createHash("sha256");
-  entries.forEach(({ rel, bytes }, index) => {
+  paths.forEach((rel, index) => {
     if (index > 0) hash.update("\n");
     hash.update(`${rel}\u0000`);
-    hash.update(bytes.toString("base64"));
+    hash.update(readFileSync(join(dir, rel)).toString("base64"));
   });
   return hash.digest("hex");
 }
