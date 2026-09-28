@@ -118,7 +118,7 @@ export const PATCH = handle(app);
 export const DELETE = handle(app);
 ```
 
-Use `createCopilotHonoHandler` (the non-deprecated factory; `createCopilotEndpoint` is an alias). The frontend selects this agent via `agentId: "default"`.
+**Installed `@copilotkit/runtime 1.73.3`:** use `createCopilotHonoHandler` — the non-deprecated factory in this installed family, where `createCopilotEndpoint` is an alias. Treat that as version-qualified guidance rather than a permanent API name: upstream documentation surfaces currently also describe `createCopilotEndpointHono` and `createCopilotRuntimeHandler`, so re-check the installed `@copilotkit/runtime/v2` exports and types after any CopilotKit upgrade. The frontend selects this agent via `agentId: "default"`.
 
 ### Shared State (useAgent)
 

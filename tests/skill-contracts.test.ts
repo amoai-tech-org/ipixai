@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
 
 function readRepoFile(path: string) {
@@ -10,14 +10,26 @@ function readMarkdownTree(path: string): Array<{ path: string; content: string }
   const root = join(process.cwd(), path);
   const results: Array<{ path: string; content: string }> = [];
 
+  // Fail loudly on a renamed or deleted skill tree. Without this the walker
+  // throws a bare ENOENT from readdirSync, and a contract that silently scans
+  // nothing is worse than one that fails.
+  if (!existsSync(root)) {
+    throw new Error(`Skill tree not found: ${path}`);
+  }
+
   function visit(dir: string) {
     for (const entry of readdirSync(dir)) {
       const absolute = join(dir, entry);
       if (statSync(absolute).isDirectory()) {
         visit(absolute);
       } else if (entry.endsWith(".md")) {
-        const relative = absolute.slice(process.cwd().length + 1);
-        results.push({ path: relative, content: readFileSync(absolute, "utf8") });
+        // `relative()` rather than slicing by `process.cwd().length`: slicing
+        // assumed a separator width and a trailing-slash-free prefix, which is
+        // not portable.
+        results.push({
+          path: relative(process.cwd(), absolute),
+          content: readFileSync(absolute, "utf8"),
+        });
       }
     }
   }
@@ -289,6 +301,9 @@ describe("iPix engineering skill contracts", () => {
     const packageJson = JSON.parse(readRepoFile("package.json")) as {
       dependencies: Record<string, string>;
     };
+    // Derived from package.json, not a copy of the reference table, so the
+    // documented family and the installed family cannot drift apart. Every name
+    // here must appear as a row in the integration reference.
     for (const name of [
       "@copilotkit/runtime",
       "@copilotkit/react-core",
@@ -298,6 +313,7 @@ describe("iPix engineering skill contracts", () => {
       "@mastra/core",
       "@mastra/memory",
       "@mastra/pg",
+      "@mastra/client-js",
     ]) {
       const version = packageJson.dependencies[name]?.replace(/^[~^]/, "");
       expect(version).toBeTruthy();
@@ -354,18 +370,32 @@ describe("iPix engineering skill contracts", () => {
     expect(stale).toEqual([]);
   });
 
-  test("iPix CopilotKit v2 conventions use the installed in-process runtime contract", () => {
+  test("iPix CopilotKit v2 conventions delegate the runtime contract to the canonical reference", () => {
     const conventions = readRepoFile(
       ".claude/skills/copilotkit/references/upgrade/ipix-v2-conventions.md",
     );
 
+    // This file owns legacy→current API translation and upgrade rules, not the
+    // current runtime contract. It must point at the canonical reference rather
+    // than restate it: duplicated runtime truth drifts, and only one copy gets
+    // updated when the runtime changes.
+    expect(conventions).toContain(
+      "../integrations/references/integrations/mastra.md",
+    );
     expect(conventions).not.toContain("1.60.0");
-    expect(conventions).toContain("createCopilotHonoHandler");
-    expect(conventions).toContain("requirePlannerResourceId");
-    expect(conventions).toContain("createLocalAgents(resourceId)");
-    expect(conventions).toContain("TenantAbortRunner");
-    expect(conventions).toContain("PostgresStore");
-    expect(conventions).toContain("server revalidates");
+
+    // The current in-process runtime contract is asserted against its canonical
+    // home, so it can no longer be weakened by editing a file that only
+    // summarises it.
+    const runtimeContract = readRepoFile(
+      ".claude/skills/copilotkit/references/integrations/references/integrations/mastra.md",
+    );
+    expect(runtimeContract).toContain("createCopilotHonoHandler");
+    expect(runtimeContract).toContain("requirePlannerResourceId");
+    expect(runtimeContract).toContain("createLocalAgents(resourceId)");
+    expect(runtimeContract).toContain("TenantAbortRunner");
+    expect(runtimeContract).toContain("PostgresStore");
+    expect(runtimeContract).toContain("server revalidates");
   });
 
   test("active CopilotKit debugging guidance teaches the preferred Hono handler", () => {
