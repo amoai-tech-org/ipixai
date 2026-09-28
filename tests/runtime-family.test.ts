@@ -357,15 +357,24 @@ describe("documented runtime pins match the installed family (IPI-1368)", () => 
     // label, so no pattern is built from the data being checked. Backticks around
     // the version are optional: the house style uses them, but a plain-text
     // restatement is the same defect and requiring backticks would let it through.
-    // Every occurrence is examined, not just the first — a pin can be restated
-    // anywhere in the region, and checking only the first mention let an injected
-    // one through.
+    //
+    // Every occurrence of every label is examined and every version found is
+    // reported, so the failure lists all of them rather than the first. The
+    // detection itself did not depend on this: the assertion requires an empty
+    // list, so *any* restatement — matching or stale — already failed the suite.
+    // Reporting only the first made the comment above untrue and hid the rest.
+    //
+    // The window is bounded by the end of the line, so a label at the end of one
+    // line with a version at the start of the next is not matched. Left as-is:
+    // widening across lines would pair a label with an unrelated version more
+    // often than it would catch a real restatement.
     const VERSION = /`?(\d+\.\d+\.\d+)`?/;
     const restated = regions.flatMap(([path, text]) =>
       labelled.flatMap(([label, installed]) => {
+        const found: Array<{ path: string; label: string; documented: string; installed: string }> =
+          [];
         let from = 0;
-        let documented: string | undefined;
-        while (documented === undefined) {
+        for (;;) {
           const at = text.indexOf(label, from);
           if (at === -1) break;
           const lineEnd = text.indexOf("\n", at);
@@ -373,10 +382,11 @@ describe("documented runtime pins match the installed family (IPI-1368)", () => 
             lineEnd === -1 ? text.length : lineEnd,
             at + label.length + 24,
           );
-          documented = VERSION.exec(text.slice(at + label.length, windowEnd))?.[1];
+          const documented = VERSION.exec(text.slice(at + label.length, windowEnd))?.[1];
+          if (documented !== undefined) found.push({ path, label, documented, installed });
           from = at + label.length;
         }
-        return documented === undefined ? [] : [{ path, label, documented, installed }];
+        return found;
       }),
     );
     expect(
