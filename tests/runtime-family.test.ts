@@ -300,6 +300,10 @@ describe("documented runtime pins match the installed family (IPI-1368)", () => 
     "@mastra/pg",
     "@mastra/client-js",
     "mastra",
+    // `next` is included because the PRD named a Next.js version among the stale
+    // pins, so a framework row is checked by the same rule rather than only by the
+    // prose check below.
+    "next",
   ] as const;
 
   it("the canonical table matches every installed family package", () => {
@@ -350,10 +354,13 @@ describe("documented runtime pins match the installed family (IPI-1368)", () => 
       ["github/mastra/mastra-repos.md", preambleOf(read("github/mastra/mastra-repos.md"))],
     ];
     // One static pattern, applied to a window sliced around each occurrence of the
-    // label, so no pattern is built from the data being checked. Every occurrence
-    // is examined, not just the first: a pin can be restated anywhere in the
-    // region, and checking only the first mention let an injected one through.
-    const BACKTICKED_VERSION = /`(\d+\.\d+\.\d+)`/;
+    // label, so no pattern is built from the data being checked. Backticks around
+    // the version are optional: the house style uses them, but a plain-text
+    // restatement is the same defect and requiring backticks would let it through.
+    // Every occurrence is examined, not just the first — a pin can be restated
+    // anywhere in the region, and checking only the first mention let an injected
+    // one through.
+    const VERSION = /`?(\d+\.\d+\.\d+)`?/;
     const restated = regions.flatMap(([path, text]) =>
       labelled.flatMap(([label, installed]) => {
         let from = 0;
@@ -366,7 +373,7 @@ describe("documented runtime pins match the installed family (IPI-1368)", () => 
             lineEnd === -1 ? text.length : lineEnd,
             at + label.length + 24,
           );
-          documented = BACKTICKED_VERSION.exec(text.slice(at + label.length, windowEnd))?.[1];
+          documented = VERSION.exec(text.slice(at + label.length, windowEnd))?.[1];
           from = at + label.length;
         }
         return documented === undefined ? [] : [{ path, label, documented, installed }];
