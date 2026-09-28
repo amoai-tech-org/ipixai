@@ -246,7 +246,14 @@ describe("IPI-1050 MEM-001: prior normal message history reaches the next Planne
     }
   });
 
-  it("persists the prior turn in the thread, so it is durable state and not a live cache", async () => {
+  // Deliberately narrow: this recalls through the same in-process Memory that
+  // served both model calls, so it proves the turn was *stored under the thread*
+  // (and not merely streamed through), not that it survives a process boundary.
+  // It cannot distinguish a persisted row from a live cache, and it does not
+  // claim to — restart durability is owned solely by
+  // `scripts/mem-001-restart-proof.mjs`, which reads the thread back from a
+  // second OS process.
+  it("stores the prior turn under the thread so it can be recalled by thread id", async () => {
     const agent = getProductionPlannerAgent();
     const memory = await agent.getMemory();
     expect(memory).toBeDefined();

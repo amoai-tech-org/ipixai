@@ -105,16 +105,28 @@ async function loadProofDeps() {
   const { MastraLanguageModelV2Mock, simulateReadableStream } = await import(
     "@mastra/core/test-utils/llm-mock"
   );
-  const { requireMastraPostgresUrl, getMastraPostgresStore } = await import(
-    "../src/mastra/pg-store.ts"
-  );
+  const { requireMastraPostgresUrl, getMastraPostgresStore, resetMastraPgSingletonsForTests } =
+    await import("../src/mastra/pg-store.ts");
   return {
     getProductionPlannerAgent,
     MastraLanguageModelV2Mock,
     simulateReadableStream,
     requireMastraPostgresUrl,
     getMastraPostgresStore,
+    resetMastraPgSingletonsForTests,
   };
+}
+
+/**
+ * Release the process-wide pool before a child phase exits.
+ *
+ * `pg.Pool` keeps the event loop alive until its idle clients are reaped, which
+ * measured **11.78 s** of dead wall time per phase (three phases per run). This
+ * is the same teardown `scripts/host-pg-001-proof.mjs` already uses.
+ */
+async function closeProofPool() {
+  const { resetMastraPgSingletonsForTests } = await loadProofDeps();
+  await resetMastraPgSingletonsForTests();
 }
 
 function requireProofUrl(requireMastraPostgresUrl) {
@@ -313,31 +325,64 @@ async function cleanupPhase(ids) {
 const phase = process.argv[2] ?? "parent";
 const keep = process.argv.includes("--keep");
 
+/**
+ * Read one `MARKER {json}` status line from a child's stdout.
+ *
+ * Deliberately `find` rather than "the last line": a dependency can log to
+ * stdout *after* the status line (warnings, telemetry, deprecation notices), and
+ * assuming line order turns a passing proof into an unparseable crash.
+ */
+function parseMarkerOutput(stdout, marker) {
+  const line = String(stdout ?? "")
+    .split("\n")
+    .find((candidate) => candidate.startsWith(`${marker} `));
+  if (!line) {
+    throw new Error(`child process never reported ${marker}`);
+  }
+  return JSON.parse(line.slice(marker.length + 1));
+}
+
 try {
   if (phase === "write") {
-    const result = await writePhase(proofIds(process.argv[3]));
-    console.log("WRITE_OK", JSON.stringify(result));
+    try {
+      const result = await writePhase(proofIds(process.argv[3]));
+      console.log("WRITE_OK", JSON.stringify(result));
+    } finally {
+      await closeProofPool();
+    }
   } else if (phase === "read") {
-    const result = await readPhase(proofIds(process.argv[4]), process.argv[3]);
-    console.log("READ_OK", JSON.stringify(result));
+    try {
+      const result = await readPhase(proofIds(process.argv[4]), process.argv[3]);
+      console.log("READ_OK", JSON.stringify(result));
+    } finally {
+      await closeProofPool();
+    }
   } else if (phase === "cleanup") {
-    await cleanupPhase(proofIds(process.argv[3]));
-    console.log("CLEANUP_OK");
+    try {
+      await cleanupPhase(proofIds(process.argv[3]));
+      console.log("CLEANUP_OK");
+    } finally {
+      await closeProofPool();
+    }
   } else {
     const script = fileURLToPath(import.meta.url);
     const nonce = randomUUID();
-    let wrote = false;
+    // Set BEFORE spawning: process A can persist the synthetic thread and then
+    // fail during a later check (or be killed). Gating cleanup on a zero exit
+    // status left that synthetic thread, its messages, and its resource behind in
+    // a shared database — reproduced with a post-write failure: 1 thread / 2
+    // messages orphaned. Cleanup deletes by exact namespace IDs, so running it
+    // when process A never got as far as writing is a harmless no-op.
+    let writeMayHavePersisted = false;
     let primaryError = null;
     try {
+      writeMayHavePersisted = true;
       const write = spawnSync("npx", ["tsx", script, "write", nonce], {
         env: process.env,
         encoding: "utf8",
       });
       if (write.status !== 0) throw new Error(redactError(write.stderr || write.stdout));
-      wrote = true;
-      const writePayload = JSON.parse(
-        write.stdout.trim().split("\n").at(-1).replace(/^WRITE_OK\s/, ""),
-      );
+      const writePayload = parseMarkerOutput(write.stdout, "WRITE_OK");
 
       const read = spawnSync(
         "npx",
@@ -345,9 +390,7 @@ try {
         { env: process.env, encoding: "utf8" },
       );
       if (read.status !== 0) throw new Error(redactError(read.stderr || read.stdout));
-      const readPayload = JSON.parse(
-        read.stdout.trim().split("\n").at(-1).replace(/^READ_OK\s/, ""),
-      );
+      const readPayload = parseMarkerOutput(read.stdout, "READ_OK");
 
       if (readPayload.pid === writePayload.pid) {
         throw new Error("expected a different PID for the continuation process");
@@ -369,7 +412,7 @@ try {
     } catch (err) {
       primaryError = err;
     } finally {
-      if (wrote && !keep) {
+      if (writeMayHavePersisted && !keep) {
         const cleanup = spawnSync("npx", ["tsx", script, "cleanup", nonce], {
           env: process.env,
           encoding: "utf8",
