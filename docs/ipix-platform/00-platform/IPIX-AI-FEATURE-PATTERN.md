@@ -2,7 +2,7 @@
 
 **Purpose:** the reusable implementation contract for AI-enabled iPix features. This document defines **how** a feature moves from user intent to an AI proposal, human review, trusted authorization, durable write, and measurable result. Platform ownership stays in [iPix Platform Architecture](./IPIX-PLATFORM-ARCHITECTURE.md).
 
-**Verified baseline:** 2026-09-22 against merged `main` (`8086de52a2579cd7828c64eedb9e6635bb65e853`), installed iPix package versions, the current Planner/Shoot approval implementation, live Supabase read-only checks, official vendor docs/source, and pinned local working models.
+**Verified baseline:** the live Supabase proof in §8 remains explicitly dated 2026-09-22. Runtime/API references were refreshed 2026-09-28 against current Product code and the canonical [`docs/mastra/runtime-family.md`](../../mastra/runtime-family.md); exact task/SHA evidence belongs in Linear/GitHub.
 
 ## 30-second summary
 
@@ -61,7 +61,7 @@ flowchart LR
 
 The strongest current example is the Production Planner → ShootPlan approval path:
 
-- `src/mastra/agents/index.ts` — Production Planner reasons and selects typed tools.
+- `src/mastra/agents/production-planner.ts` — constructs the Production Planner, its typed tools, model, memory and tool-gate wrappers; `src/mastra/runtime.ts` registers it under the Product key.
 - `src/mastra/workflows/shoot-plan-review.ts` — stages a plan revision, suspends for review, resumes only after durable decision proof.
 - `src/lib/auth/runtime-org.ts` — derives trusted organization scope from authenticated membership; client org hints do not create authority.
 - `src/lib/shoot/decide-shoot-plan-revision.ts` — calls the bounded approval RPC from trusted application code.
@@ -114,12 +114,12 @@ flowchart TD
     W --> T
 ```
 
-**Current iPix model:** `src/mastra/agents/index.ts` registers the Production Planner agent. Reuse the same architectural shape before introducing another agent.
+**Current iPix model:** `src/mastra/agents/production-planner.ts` constructs the Production Planner; `src/mastra/runtime.ts` registers it under the Product key. Reuse that architectural shape before introducing another agent.
 
 **Official reference — MODEL / ADAPT**
 
 - URL: https://mastra.ai/docs/agents/overview
-- Source: current Mastra Agent APIs; compare with installed `@mastra/core 1.63.2` types.
+- Source: current Mastra Agent APIs; compare with the currently installed `@mastra/core` types; the canonical family is [`docs/mastra/runtime-family.md`](../../mastra/runtime-family.md).
 - Use: Agent for reasoning/orchestration over bounded tools.
 - Do not copy: generic example auth, persistence, or domain data assumptions.
 - Apply to: `src/mastra/agents/**` and future domain-agent docs.
@@ -171,7 +171,7 @@ Do not wrap a trivial one-step tool call in a workflow.
 - URL: https://mastra.ai/docs/workflows/overview
 - Source: https://github.com/mastra-ai/mastra/blob/main/workflows/README.md
 - Use: ordered durable control and suspend/resume.
-- Do not copy: example schemas or persistence assumptions without checking installed `@mastra/core 1.63.2` APIs.
+- Do not copy: example schemas or persistence assumptions without checking the currently installed `@mastra/core` APIs and runtime-family contract.
 - Apply to: `src/mastra/workflows/**` only where control requirements justify orchestration.
 - Verify: resumption re-reads durable authority where the action is consequential; resume payload alone is never approval truth.
 
@@ -192,7 +192,7 @@ Frontend tools may update UI state or perform browser-local conveniences. They a
 **CopilotKit shared state — MODEL / ADAPT**
 
 - URL: https://docs.copilotkit.ai/mastra/shared-state
-- Source: current installed `@copilotkit/react-core 1.68.1` types + CopilotKit pinned at `5ffe92689c3322ccc90a5137db1c8f1a6ffd79f2`.
+- Source: currently installed `@copilotkit/react-core` types + the pinned upstream CopilotKit reference listed here; iPix package pins live in [`docs/mastra/runtime-family.md`](../../mastra/runtime-family.md).
 - Use: agent/UI collaboration around an editable proposal.
 - Do not copy: shared state as durable business truth.
 - Apply to: proposal/editing surfaces only.
@@ -443,7 +443,7 @@ flowchart LR
 | Journey step | Current / target iPix owner | Evidence / destination |
 | --- | --- | --- |
 | Campaign/brand context | Supabase + trusted server reads | existing domain tables/auth helpers |
-| Reasoning | Production Planner agent | `src/mastra/agents/index.ts` |
+| Reasoning | Production Planner agent | `src/mastra/agents/production-planner.ts`; registration in `src/mastra/runtime.ts` |
 | Bounded capabilities | Mastra typed tools | `src/mastra/tools/**` |
 | Approval orchestration | Mastra workflow | `src/mastra/workflows/shoot-plan-review.ts` |
 | Proposal/review UI | CopilotKit/native controlled React | domain review surface; frontend not authority |
@@ -512,10 +512,10 @@ Only promote Later items when a measured product/runtime need justifies them.
 
 | Source | Pin/version | Classification | Exact source/pattern | Use in iPix | Do not copy | Verification |
 | --- | --- | --- | --- | --- | --- | --- |
-| Current iPix | merged `main` `8086de52…` | **KEEP** | Planner agent, trusted org, ShootPlan workflow/RPC | Baseline lifecycle/security | Do not replace working contracts | Code + live DB + tests |
-| CopilotKit | iPix `1.68.1`; local ref `5ffe92689c3322ccc90a5137db1c8f1a6ffd79f2` | **ADAPT** | v2 frontend tool/HITL hooks; Mastra examples | Controlled GenUI/HITL concepts | Deprecated v1/browser auth | Installed types + official source |
+| Current iPix | current clean `origin/main`; exact task/PR SHA in execution evidence | **KEEP** | Planner agent, trusted org, ShootPlan workflow/RPC | Baseline lifecycle/security | Do not replace working contracts | Code + dated live DB proof + tests |
+| CopilotKit | iPix installed family → [`docs/mastra/runtime-family.md`](../../mastra/runtime-family.md); local ref `5ffe92689c3322ccc90a5137db1c8f1a6ffd79f2` | **ADAPT** | v2 frontend tool/HITL hooks; Mastra examples | Controlled GenUI/HITL concepts | Deprecated v1/browser auth | Installed types + official source |
 | AIMock | `a8773ddd6bdc9c9361c2b32bd16a5288cf5a8536` | **ADAPT** | deterministic AG-UI/model testing | Cheap deterministic gates | Final live proof replacement | Contract/event compatibility |
-| `mastra-base` | `a065cea10599d8674b8b4b51e54fd281d92e3f68` | **MODEL / ADAPT** | memory, processors, AIMock, scorers, eval CI | Testing/eval/observability structure | A2A/MCP/DuckDB/domain/auth wholesale | Compare with iPix Mastra `1.63.2` |
+| `mastra-base` | `a065cea10599d8674b8b4b51e54fd281d92e3f68` | **MODEL / ADAPT** | memory, processors, AIMock, scorers, eval CI | Testing/eval/observability structure | A2A/MCP/DuckDB/domain/auth wholesale | Compare with current installed iPix Mastra types/runtime-family contract |
 | `mastra-supabase-starter` | `7d33a505055f42530493cb5f3e047b5df6ba3d95` | **ADAPT** | auth→resource mapping, PostgresStore, PgVector, integration tests | Tenant-safe context/retrieval concepts | “all authenticated users allowed” | Keep iPix org/role model |
 | `saas-starter-ai` | `d492f6eb2995f6c5365ff4027acdc55b3f2a84a2`; Mastra core `0.20.0` | **REFERENCE ONLY** | Next/Supabase/chat product shell | UI/product ideas | Old Mastra APIs/service shortcuts | Never API authority |
 

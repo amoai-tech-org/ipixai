@@ -2,7 +2,7 @@
 
 **Purpose:** the shared cross-domain architecture source of truth for iPix. Domain docs should link here for ownership, state, tenancy, AI runtime, search/retrieval, external research, media, and approval rules instead of redefining them.
 
-**Verified baseline:** 2026-09-22 against the current iPix worktree, installed package versions, live Supabase read-only checks, official vendor docs, and pinned local reference repositories.
+**Verified baseline:** live Supabase facts below remain explicitly dated 2026-09-22. Runtime/API topology was refreshed 2026-09-28 against current Product code and the canonical [`docs/mastra/runtime-family.md`](../../mastra/runtime-family.md) contract; exact task/SHA evidence belongs in Linear/GitHub.
 
 ## 30-second summary
 
@@ -26,29 +26,36 @@ It does **not** define domain schemas, redesign the current runtime, or authoriz
 
 ## 2. Current verified stack
 
+Fast-changing package pins are intentionally **not duplicated here**. Executable versions live in `package.json`/lockfile; the one written compatibility table is [`docs/mastra/runtime-family.md`](../../mastra/runtime-family.md).
+
 | Layer | Current implementation | Verified owner / role | Evidence |
 | --- | --- | --- | --- |
-| Web application | Next.js `16.3.5`, React `19.2.1` | Routes, server actions, operator workspace | `package.json` |
-| AI interaction | CopilotKit `1.68.1`, AG-UI/Mastra bridge | Chat, UI tools, rendered AI state, runtime endpoint | `src/app/api/copilotkit/[[...slug]]/route.ts` |
-| AI orchestration | Mastra core `1.63.2` | Agents, tools, workflows, memory, run lifecycle | `src/mastra/**` |
-| AI runtime persistence | `@mastra/pg 1.22.2`, `@mastra/memory 1.28.1` | Mastra threads/messages/workflow state only | `src/mastra/pg-store.ts`; live `mastra` schema |
-| Durable business truth | Supabase/Postgres, `@supabase/supabase-js 2.112.4` | Org, Brand, Campaign, Shoot, CRM, approval/audit truth | migrations + RLS/RPC tests |
-| Search primitives | Postgres SQL/FTS + installed `vector` extension | Tenant-filtered exact/text/semantic retrieval when justified | live extension check; Supabase docs |
-| Media | Cloudinary Node SDK `^2.11.0` | Image/video upload, delivery, provider media identity | `src/lib/cloudinary/**` |
+| Web application | Next.js + React App Router | Routes, server actions, operator workspace | `package.json`; `src/app/**` |
+| AI interaction | CopilotKit v2 + AG-UI/Mastra bridge | Chat, UI tools, rendered proposal state, `/api/copilotkit` | Product route + installed types |
+| AI orchestration | Mastra | Production Planner, typed tools, workflows, memory/run lifecycle | `src/mastra/**` |
+| AI runtime persistence | Mastra `Memory` + guarded `PostgresStore` | Threads/messages/workflow/runtime state only; private `mastra` schema | `src/mastra/pg-store.ts`; migrations |
+| Durable business truth | Supabase/Postgres | Org, Brand, Campaign, Shoot, CRM, approval/audit truth | migrations + RLS/RPC tests |
+| Search primitives | Postgres SQL/FTS + `vector` extension where justified | Tenant-filtered exact/text/semantic retrieval | database evidence + Supabase docs |
+| Media | Cloudinary server integration | Image/video upload, transformation/delivery, provider media identity | `src/lib/cloudinary/**` |
 | Web crawling | Firecrawl HTTP API through Edge Functions | Deep/multi-page brand crawl/extraction | `supabase/functions/_shared/firecrawl.ts` |
-| Current default planner model | `openai("gpt-5.6-luna")` | Production Planner reasoning/tool selection | `src/mastra/agents/index.ts` |
+| Planner model | Source-configured provider/model | Production Planner reasoning/tool selection | `src/mastra/agents/production-planner.ts` |
 
-**Model verification:** the current iPix implementation uses `openai("gpt-5.6-luna")` in `src/mastra/agents/index.ts`. OpenAI's first-party API sources independently confirm that exact model ID: the model catalog lists `gpt-5.6-luna` (https://developers.openai.com/api/docs/models), the dedicated model page documents GPT-5.6 Luna (https://developers.openai.com/api/docs/models/gpt-5.6-luna), and the API changelog records the GPT-5.6 family launch including Luna (https://developers.openai.com/api/docs/changelog). All three URLs returned HTTP 200 during verification on 2026-09-22. Do not replace the configured model from review assumptions; change this line only when the implementation or official OpenAI model support changes.
+### Current Product runtime topology
 
-### Current runtime topology
+The Product route is unambiguous and in-process:
 
-The current Next.js Copilot route creates local Mastra agents and exposes them through `CopilotRuntime`. iPix currently supports a local custom runner path and a CopilotKit Intelligence path. A separate remote Mastra service is **not yet the canonical production runtime**; cross-instance run ownership/recovery is being proven separately and must not be presented here as completed architecture.
+```text
+authenticated /api/copilotkit
+  → requirePlannerResourceId(request)
+  → createLocalAgents(resourceId)
+  → TenantAbortRunner(resourceId, request.signal)
+  → Production Planner / current Mastra runtime
+  → guarded PostgresStore for durable AI state
+```
 
-This distinction follows the official integration models:
+`MASTRA_BASE_URL` and managed CopilotKit Intelligence keys do **not** select a remote Product Planner. Remote-agent helpers that remain in source are reference/cleanup surface only; they must not be presented as a production fallback or emergency switch.
 
-- **Mastra web-framework deployment:** https://github.com/mastra-ai/mastra/blob/main/docs/src/content/en/docs/deployment/web-framework.mdx — **MODEL** the framework-integrated case: Mastra deploys alongside the Next.js application.
-- **Mastra deployment overview:** https://github.com/mastra-ai/mastra/blob/main/docs/src/content/en/docs/deployment/overview.mdx — **REFERENCE** the separate Mastra server as a different deployment option; do not describe it as current iPix until the remote-runtime qualification tasks pass.
-- **CopilotKit local-agent example:** https://github.com/CopilotKit/CopilotKit/blob/main/showcase/shell-docs/src/content/docs/integrations/mastra/shared-state/in-app-agent-write.mdx — **MODEL** the `MastraAgent.getLocalAgents({ mastra, ... })` embedding pattern; verify against installed `@copilotkit/*` types before copying API syntax.
+Official CopilotKit/Mastra examples may show remote agents or demo identity. **MODEL/REFERENCE** those transport patterns only after installed iPix types and this Product boundary; never copy anonymous/demo tenancy or persistence assumptions.
 
 ## 3. System boundaries
 
@@ -212,7 +219,7 @@ Use three distinct layers instead of one giant logging system:
 
 Do not invent domain audit tables merely to duplicate Mastra traces, and do not rely on Mastra traces as durable approval or business audit truth.
 
-Current `mastra-base` reference demonstrates Mastra-native observability, sensitive-data filtering, eval datasets/scorers, and AIMock. These are **adaptation references**, not proof they are already fully configured in iPix.
+Current `mastra-base` reference demonstrates Mastra-native observability, sensitive-data filtering, eval datasets/scorers, and AIMock. These are **adaptation references**, not proof they are already fully configured in iPix. Operational telemetry is never business/approval truth; normal diagnostics must not require raw prompts/model outputs, auth headers/cookies, session/access tokens, passwords, API/private keys, database connection strings, or sensitive personal data. Minimize/redact/pseudonymize where diagnostic context is genuinely required.
 
 ## 11. Deployment and runtime constraints
 
@@ -236,7 +243,7 @@ order by schemaname;
 
 | Source | Pinned/version evidence | Exact pattern inspected | Action | iPix adaptation | Do not copy |
 | --- | --- | --- | --- | --- | --- |
-| Current iPix | CopilotKit `1.68.1`, Mastra `1.63.2` | Copilot route, auth hooks, runtime, pg-store, workflows, approval RPCs | **KEEP** | Make this the baseline | Do not replace working contracts from generic starters |
+| Current iPix | `package.json` + [`docs/mastra/runtime-family.md`](../../mastra/runtime-family.md) | Copilot route, auth hooks, runtime, pg-store, workflows, approval RPCs | **KEEP** | Make current code/types the baseline | Do not replace working contracts from generic starters |
 | CopilotKit monorepo | local HEAD `5ffe92689c3322ccc90a5137db1c8f1a6ffd79f2` | `packages/react-core/src/v2/hooks/use-frontend-tool.tsx`, `use-human-in-the-loop.tsx`, `examples/canvas/mastra/**` | **ADAPT** | Controlled UI tools/HITL/shared state concepts | Do not copy deprecated v1 APIs or treat browser tools as authorization |
 | CopilotKit AIMock | local HEAD `a8773ddd6bdc9c9361c2b32bd16a5288cf5a8536` | deterministic model/AG-UI testing patterns | **ADAPT** | Use where it can replace expensive live-model tests | Do not replace final real-runtime certification |
 | `mastra-base` | HEAD `a065cea10599d8674b8b4b51e54fd281d92e3f68`, core `^1.36.0` | `src/mastra/index.ts`, agent, memory, AIMock, processors, scorers, eval script | **MODEL / ADAPT** | Structure, evals, deterministic mocks, observability concepts | Do not copy A2A/MCP/DuckDB/auth wholesale |
@@ -276,7 +283,7 @@ Every implementation task that uses an external reference must record: **URL →
 
 5. **Mastra canvas example:** https://github.com/CopilotKit/CopilotKit/tree/main/examples/canvas/mastra
    **Use:** model shared-state + editable canvas structure.
-   **Adapt only after:** comparing its package versions/API shape with iPix `1.68.1` installed source.
+   **Adapt only after:** comparing its package versions/API shape with the currently installed iPix source/types and runtime-family contract.
 
 6. **Generative UI examples:** https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/generative-ui
    **Use:** choose controlled rendering patterns first.
@@ -290,7 +297,7 @@ Every implementation task that uses an external reference must record: **URL →
 
 1. **Agents:** https://mastra.ai/docs/agents/overview
    **Use:** one domain agent when reasoning/tool choice is needed.
-   **Current iPix model:** `src/mastra/agents/index.ts`.
+   **Current iPix model:** `src/mastra/agents/production-planner.ts` constructs the agent; `src/mastra/runtime.ts` registers it.
 
 2. **Tools:** https://mastra.ai/docs/agents/using-tools
    **Official source pattern:** https://github.com/mastra-ai/mastra/blob/main/packages/core/src/tools/hitl.md
