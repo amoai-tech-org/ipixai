@@ -20,9 +20,11 @@
  *     `LanguageModelV2CallOptions` the Planner produced, not the model's prose;
  *   - process B sends ONLY the follow-up message, so the browser cannot be the
  *     thing that carried the history;
- *   - the fact is asserted absent from every `system` message and from the
- *     resource's stored `workingMemory`, ruling out resource-scoped Working
- *     Memory as the explanation;
+ *   - the fact is asserted absent from every `system` message, ruling out
+ *     resource-scoped Working Memory as the explanation. (The companion query
+ *     against the resource's stored `workingMemory` is only a forward guard and
+ *     is usually vacuous in the green path — see `resourceRowPresent` in the
+ *     PASS payload and the comment on that query.);
  *   - a new thread under the SAME resource must not recall the fact;
  *   - the read PID must differ from the write PID;
  *   - the `mastra` schema fingerprint must be byte-identical before and after,
@@ -310,7 +312,7 @@ async function readPhase(ids, expectedFingerprint) {
     historyCarried: true,
     workingMemoryCarried: false,
     // Reported, not asserted: `false` is the expected green-path value and means
-    // the resource-row guard below could not be exercised (see the comment there).
+    // the resource-row guard above could not be exercised (see the comment there).
     resourceRowPresent,
     freshThreadLeak: false,
     fingerprintUnchanged: true,
