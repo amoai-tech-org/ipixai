@@ -193,7 +193,8 @@ describe("Playwright E2E harness hardening", () => {
       "utf8",
     );
     const workflow = (parse(source) ?? {}) as { env?: Record<string, string> };
-    const declared = String(workflow.env?.CERT_SPECS ?? "")
+    const rawDeclaration = String(workflow.env?.CERT_SPECS ?? "");
+    const declared = rawDeclaration
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean);
@@ -203,21 +204,47 @@ describe("Playwright E2E harness hardening", () => {
     const journey = (job.steps ?? []).find((step) =>
       step.run?.includes("npx playwright test"),
     );
-    const expander = (journey?.run ?? "")
+    const runLines = (journey?.run ?? "")
       .split("\n")
       .map((line) => line.trim())
-      .find((line) => /^(mapfile|read)\b/.test(line) && line.includes("specs"));
-    expect(expander, "the journey step must expand CERT_SPECS into an array").toBeDefined();
+      .filter((line) => line !== "" && !line.startsWith("#"));
 
-    const expansion = spawnSync("bash", ["-c", `${expander}\nprintf '%s\\n' "\${specs[@]}"`], {
-      encoding: "utf8",
-      env: { ...process.env, CERT_SPECS: declared.join("\n") },
-    });
+    const expander = runLines.find(
+      (line) => /^(mapfile|read)\b/.test(line) && line.includes("specs"),
+    );
+    const declarer = runLines.find((line) => line.startsWith("declared="));
+    expect(expander, "the journey step must expand CERT_SPECS into an array").toBeDefined();
+    expect(declarer, "the journey step must derive the declared line count").toBeDefined();
+
+    // GitHub supplies a YAML block scalar's value WITH its trailing newline, and
+    // the here-string adds another. Simulating the value without that newline is
+    // how an earlier version of this test passed while the workflow appended an
+    // empty array element and failed its own count check on every run.
+    const expansion = spawnSync(
+      "bash",
+      [
+        "-c",
+        [expander, declarer, `printf '%s\\n' "\${specs[@]}"`, `echo "declared=\${declared}"`].join(
+          "\n",
+        ),
+      ],
+      {
+        encoding: "utf8",
+        env: { ...process.env, CERT_SPECS: `${rawDeclaration}` },
+      },
+    );
     expect(expansion.status, expansion.stderr).toBe(0);
+
+    const [specOutput, ...declaredLines] = expansion.stdout.split("declared=");
+    // Drop only printf's own trailing newline, so an accidental empty array
+    // element stays visible instead of being filtered away.
+    const passed = specOutput.split("\n").slice(0, -1);
+    expect(passed, "the run step must pass every declared spec to Playwright").toEqual(declared);
+    expect(passed, "no array element may be empty").not.toContain("");
     expect(
-      expansion.stdout.split("\n").filter(Boolean),
-      "the run step must pass every declared spec to Playwright",
-    ).toEqual(declared);
+      String(declaredLines.join("")).trim(),
+      "the count check compares the array length against the declared line count",
+    ).toBe(String(declared.length));
   });
 
   // IPI-1332 · CERT-INTEGRITY-001 regression — a workflow_dispatch runs the

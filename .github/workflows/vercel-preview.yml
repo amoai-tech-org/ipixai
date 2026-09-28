@@ -211,17 +211,22 @@ jobs:
           # against a Preview by accident.
           # `CERT_SPECS` is the workflow-level declared list; the step above has
           # already proved it equals the candidate SHA's own copy of that list.
-          declared="$(printf '%s\n' "${CERT_SPECS:-}" | grep -cE 'e2e/[a-z0-9-]+\.spec\.ts' || true)"
-          if [ "${declared:-0}" -eq 0 ]; then
-            echo "::error::CERT_SPECS is empty; refusing to run an unbounded spec set" >&2
+          #
+          # Extract only the spec paths rather than reading every line. A YAML
+          # block scalar already ends with a newline and the here-string adds
+          # another, so a plain `mapfile -t specs <<< "$CERT_SPECS"` appends an
+          # empty element — `${#specs[@]}` would be 5 for 4 declared specs and this
+          # step would fail on every run. Verified against the real value.
+          mapfile -t specs < <(grep -oE 'e2e/[a-z0-9-]+\.spec\.ts' <<< "${CERT_SPECS:-}")
+          if [ "${#specs[@]}" -eq 0 ]; then
+            echo "::error::CERT_SPECS declares no specs; refusing to run an unbounded spec set" >&2
             exit 1
           fi
-          # `mapfile -t` reads EVERY line. `read -r -a` reads only the FIRST, so
-          # it silently shrinks a multi-line list to a single spec — the same
-          # class of silent narrowing this workflow exists to prevent.
-          mapfile -t specs <<< "$CERT_SPECS"
+          # Still guard against a first-line-only reader: the declared line count
+          # must equal the number of specs handed to Playwright.
+          declared="$(grep -cE 'e2e/[a-z0-9-]+\.spec\.ts' <<< "${CERT_SPECS:-}" || true)"
           if [ "${#specs[@]}" -ne "$declared" ]; then
-            echo "::error::expanded ${#specs[@]} spec(s) but ${declared} were declared; refusing to run a partial certification" >&2
+            echo "::error::expanded ${#specs[@]} spec(s) but ${declared} declared line(s); refusing to run a partial certification" >&2
             exit 1
           fi
           echo "Running ${#specs[@]} certified spec file(s):"
