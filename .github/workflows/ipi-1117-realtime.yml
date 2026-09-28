@@ -1,0 +1,66 @@
+name: IPI-1117 Realtime Contract
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/copilotkit/planner-run-control.ts"
+      - "src/lib/copilotkit/planner-run-control-supabase.ts"
+      - "src/lib/copilotkit/tenant-abort-runner.ts"
+      - "src/app/api/copilotkit/**"
+      - "supabase/migrations/**"
+      - "scripts/test-ipi1117-realtime.mts"
+      - "tests/fixtures/ipi-1117-realtime-driver.ts"
+      - ".github/workflows/ipi-1117-realtime.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross-process-realtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
+        with:
+          version: 2.116.0
+      - name: Enable Supabase CLI multi-registry image fallback
+        run: echo "SUPABASE_INTERNAL_IMAGE_REGISTRY=" >> "$GITHUB_ENV"
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm ci
+      - name: Start local Supabase with Auth + Realtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if supabase start --exclude storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor; then
+              exit 0
+            fi
+            echo "supabase start failed (attempt $attempt/3)"
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            supabase stop --no-backup || true
+            sleep $((attempt * 20))
+          done
+      - name: Replay reviewed migrations
+        run: supabase db reset --local
+      - name: Two-process private Realtime run-control contract
+        run: npx tsx scripts/test-ipi1117-realtime.mts
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup || true
