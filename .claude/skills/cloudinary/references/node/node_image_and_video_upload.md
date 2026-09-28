@@ -31,17 +31,6 @@ For details on all available upload functionality, see the [Upload](upload_image
 
 ![Upload widget main screen](https://cloudinary-res.cloudinary.com/image/upload/q_auto/f_auto/bo_1px_solid_grey/docs/upload_widget_dev_default_new.png "width: 600, with_code:false, with_url:false")
 
-## Contents
-
-- [Server-side upload](#server-side-upload)
-  - [Programmatic upload video tutorial](#programmatic-upload-video-tutorial)
-  - [Ensure script libraries are installed](#ensure-script-libraries-are-installed)
-  - [Node.js upload methods](#nodejs-upload-methods)
-  - [Upload response](#upload-response)
-- [Direct uploading from the browser](#direct-uploading-from-the-browser)
-
----
-
 ## Server-side upload
   
 You can upload images, videos, or any other raw file to Cloudinary from your Node.js code. Uploading is done over HTTPS using a secure protocol based on your `api_key` and `api_secret` parameters. 

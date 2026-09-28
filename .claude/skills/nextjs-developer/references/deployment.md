@@ -1,36 +1,5 @@
 # Deployment & Production
 
-## Contents
-
-- [Vercel Deployment (Recommended)](#vercel-deployment-recommended)
-  - [Quick Deploy](#quick-deploy)
-  - [vercel.json Configuration](#verceljson-configuration)
-  - [Environment Variables](#environment-variables)
-- [Self-Hosting](#self-hosting)
-  - [Standalone Output](#standalone-output)
-  - [Node.js Server](#nodejs-server)
-- [Docker Deployment](#docker-deployment)
-  - [Dockerfile (Multi-stage)](#dockerfile-multi-stage)
-  - [docker-compose.yml](#docker-composeyml)
-- [Production Optimization](#production-optimization)
-  - [next.config.js](#nextconfigjs)
-  - [Bundle Analysis](#bundle-analysis)
-  - [Performance Monitoring](#performance-monitoring)
-- [CDN & Edge](#cdn--edge)
-  - [Static Asset CDN](#static-asset-cdn)
-  - [Edge Runtime](#edge-runtime)
-- [Caching Strategy](#caching-strategy)
-  - [ISR (Incremental Static Regeneration)](#isr-incremental-static-regeneration)
-  - [On-Demand Revalidation](#on-demand-revalidation)
-- [Database Connection Pooling](#database-connection-pooling)
-- [Health Check Endpoint](#health-check-endpoint)
-- [CI/CD with GitHub Actions](#cicd-with-github-actions)
-- [Monitoring & Logging](#monitoring--logging)
-- [Quick Reference](#quick-reference)
-- [Production Checklist](#production-checklist)
-
----
-
 ## Vercel Deployment (Recommended)
 
 ### Quick Deploy

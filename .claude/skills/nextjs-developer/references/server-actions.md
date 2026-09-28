@@ -1,26 +1,5 @@
 # Server Actions
 
-## Contents
-
-- [Basic Server Action](#basic-server-action)
-- [Form with Server Action](#form-with-server-action)
-- [Server Action with Validation](#server-action-with-validation)
-- [Client Component with Server Action](#client-component-with-server-action)
-- [Server Action with Redirect](#server-action-with-redirect)
-- [Optimistic Updates](#optimistic-updates)
-- [Server Action with Authentication](#server-action-with-authentication)
-- [Inline Server Action](#inline-server-action)
-- [Programmatic Server Action Call](#programmatic-server-action-call)
-- [Revalidation Strategies](#revalidation-strategies)
-- [Server Action with File Upload](#server-action-with-file-upload)
-- [Error Handling](#error-handling)
-- [Server Action with Cookies](#server-action-with-cookies)
-- [Rate Limiting](#rate-limiting)
-- [Quick Reference](#quick-reference)
-- [Best Practices](#best-practices)
-
----
-
 ## Basic Server Action
 
 ```tsx

@@ -17,18 +17,6 @@ metadata:
 
 # Node.js video transformations
 
-## Contents
-
-- [Overview](#overview)
-- [Video transformation functionality](#video-transformation-functionality)
-  - [Video tag helper method](#video-tag-helper-method)
-  - [Direct URL builder](#direct-url-builder)
-- [Video transformation examples](#video-transformation-examples)
-- [Tutorial for building an e-commerce video](#tutorial-for-building-an-e-commerce-video)
-  - [Tutorial contents This tutorial presents the following topics. Click a timestamp to jump to that part of the video.](#tutorial-contents-this-tutorial-presents-the-following-topics-click-a-timestamp-to-jump-to-that-part-of-the-video)
-
----
-
 ## Overview
 
 After uploading videos to Cloudinary, they can be transformed in many ways. 
