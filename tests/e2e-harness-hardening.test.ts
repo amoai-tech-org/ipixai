@@ -209,10 +209,12 @@ describe("Playwright E2E harness hardening", () => {
       .map((line) => line.trim())
       .filter((line) => line !== "" && !line.startsWith("#"));
 
+    const patternLine = runLines.find((line) => line.startsWith("spec_path_pattern="));
     const expander = runLines.find(
       (line) => /^(mapfile|read)\b/.test(line) && line.includes("specs"),
     );
     const declarer = runLines.find((line) => line.startsWith("declared="));
+    expect(patternLine, "the journey step must define the spec path pattern").toBeDefined();
     expect(expander, "the journey step must expand CERT_SPECS into an array").toBeDefined();
     expect(declarer, "the journey step must derive the declared line count").toBeDefined();
 
@@ -224,9 +226,13 @@ describe("Playwright E2E harness hardening", () => {
       "bash",
       [
         "-c",
-        [expander, declarer, `printf '%s\\n' "\${specs[@]}"`, `echo "declared=\${declared}"`].join(
-          "\n",
-        ),
+        [
+          patternLine,
+          expander,
+          declarer,
+          `printf '%s\\n' "\${specs[@]}"`,
+          `echo "declared=\${declared}"`,
+        ].join("\n"),
       ],
       {
         encoding: "utf8",
@@ -245,6 +251,69 @@ describe("Playwright E2E harness hardening", () => {
       String(declaredLines.join("")).trim(),
       "the count check compares the array length against the declared line count",
     ).toBe(String(declared.length));
+  });
+
+  // IPI-1332 · CERT-INTEGRITY-001 regression — the spec path pattern drives BOTH
+  // the candidate/running comparison AND the Playwright invocation, so a path it
+  // cannot match is dropped from both sides: the guard passes while that spec
+  // never runs. `e2e/agents/seed.spec.ts` (a real file) is exactly such a path,
+  // because a narrower class excludes the sub-directory slash.
+  it("extracts every real e2e spec path, including sub-directories", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), ".github/workflows/vercel-preview.yml"),
+      "utf8",
+    );
+    const job = workflowJob(source, "deploy");
+    const assertion = (job.steps ?? []).find((step) =>
+      step.name?.startsWith("Assert the running workflow"),
+    );
+    const run = assertion?.run ?? "";
+
+    const declaredPattern = run
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.startsWith("spec_path_pattern="))
+      ?.replace(/^spec_path_pattern=/, "")
+      .replace(/^['"]|['"]$/g, "");
+    expect(declaredPattern, "the assertion step must define the spec path pattern").toBeDefined();
+
+    // Every spec file actually present must be matched by that pattern.
+    const specFiles = readdirSync(path.resolve(process.cwd(), "e2e"), {
+      recursive: true,
+      encoding: "utf8",
+    })
+      .map((entry) => `e2e/${entry}`)
+      .filter((entry) => entry.endsWith(".spec.ts"));
+    expect(specFiles.length).toBeGreaterThan(0);
+
+    const matcher = new RegExp(`^(?:${declaredPattern})$`);
+    const unmatched = specFiles.filter((file) => !matcher.test(file));
+    expect(
+      unmatched,
+      "the spec path pattern must match every real spec path, including sub-directories and mixed case",
+    ).toEqual([]);
+
+    // The same pattern must appear in the run step, or the two could drift.
+    const journey = (job.steps ?? []).find((step) =>
+      step.run?.includes("npx playwright test"),
+    );
+    expect(journey?.run).toContain("spec_path_pattern");
+  });
+
+  it("tells the operator a dispatch ref may be a branch or a tag", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), ".github/workflows/vercel-preview.yml"),
+      "utf8",
+    );
+    const job = workflowJob(source, "deploy");
+    const assertion = (job.steps ?? []).find((step) =>
+      step.name?.startsWith("Assert the running workflow"),
+    );
+
+    expect(assertion?.run).toContain("branch or tag");
+    expect(assertion?.run, "a workflow_dispatch ref is not always a branch").not.toMatch(
+      /--ref (?:set to )?the branch\b/,
+    );
   });
 
   // IPI-1332 · CERT-INTEGRITY-001 regression — a workflow_dispatch runs the

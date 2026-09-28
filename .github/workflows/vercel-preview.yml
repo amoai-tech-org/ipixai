@@ -82,17 +82,40 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Spec paths may contain uppercase, underscores and sub-directories
+          # (`e2e/agents/seed.spec.ts` already exists), so the pattern must accept
+          # any non-whitespace path character. A narrower class silently DROPS a
+          # spec from both sides of the comparison *and* from the run below, which
+          # is the silent-narrowing failure this workflow exists to prevent.
+          spec_path_pattern='e2e/[A-Za-z0-9_./-]+\.spec\.ts'
+
           # Read the declared list from the `CERT_SPECS:` block ONLY. Grepping
           # the whole file would also match a spec path that appears in a
           # comment, so a merely-documented spec could be treated as declared and
           # the comparison below could pass while that spec never runs.
+          cert_specs_block_of() {
+            sed -n '/^[[:space:]]*CERT_SPECS:[[:space:]]*|/,/^[^[:space:]]/p' "$1"
+          }
+
           cert_specs_of() {
-            sed -n '/^[[:space:]]*CERT_SPECS:[[:space:]]*|/,/^[^[:space:]]/p' "$1" \
-              | grep -oE 'e2e/[a-z0-9-]+\.spec\.ts' | sort -u
+            cert_specs_block_of "$1" | grep -oE "$spec_path_pattern" | sort -u
+          }
+
+          # Independent of the pattern above: any declared line naming a spec that
+          # the pattern cannot extract would be dropped from BOTH sides, so the
+          # comparison would pass while that spec never runs. Fail loudly instead.
+          assert_every_declared_spec_is_extractable() {
+            local stray
+            stray="$(cert_specs_block_of "$1" | grep -E '\.spec\.ts' | grep -vE "$spec_path_pattern" || true)"
+            if [ -n "$stray" ]; then
+              echo "::error::$1 declares a spec path this workflow cannot extract (spec_path_pattern=${spec_path_pattern}): ${stray}" >&2
+              exit 1
+            fi
           }
 
           # The workspace copy is the CANDIDATE SHA's (actions/checkout used
           # `ref: inputs.sha`): this is the list the candidate intends to run.
+          assert_every_declared_spec_is_extractable "$WORKFLOW_PATH"
           mapfile -t candidate < <(cert_specs_of "$WORKFLOW_PATH")
 
           # The RUNNING file is the one GitHub compiled into this job, i.e. the
@@ -100,6 +123,7 @@ jobs:
           # objects are present, then read the exact commit GitHub dispatched on.
           git fetch --no-tags origin "$RUNNING_REF"
           git show "$RUNNING_REF_SHA:$WORKFLOW_PATH" > /tmp/running-workflow.yml
+          assert_every_declared_spec_is_extractable /tmp/running-workflow.yml
           mapfile -t running < <(cert_specs_of /tmp/running-workflow.yml)
 
           echo "Certified spec list — running workflow (${RUNNING_REF} @ ${RUNNING_REF_SHA}):"
@@ -119,12 +143,12 @@ jobs:
           done
 
           if [ "${#running[@]}" -eq 0 ]; then
-            echo "::error::the workflow that ran (${RUNNING_REF} @ ${RUNNING_REF_SHA}) has no CERT_SPECS block, so its certified list cannot be verified. Re-dispatch with --ref on a branch that carries the same declaration as ${CANDIDATE_SHA}." >&2
+            echo "::error::the workflow that ran (${RUNNING_REF} @ ${RUNNING_REF_SHA}) has no CERT_SPECS block, so its certified list cannot be verified. Re-dispatch with --ref on a branch or tag that carries the same declaration as ${CANDIDATE_SHA}." >&2
             exit 1
           fi
 
           if [ "${running[*]}" != "${candidate[*]}" ]; then
-            echo "::error title=Certifying a different spec list than the candidate declares::the workflow that ran came from ${RUNNING_REF} (${RUNNING_REF_SHA}), but ${CANDIDATE_SHA} declares a different spec list. Re-dispatch with --ref set to the branch containing ${CANDIDATE_SHA}." >&2
+            echo "::error title=Certifying a different spec list than the candidate declares::the workflow that ran came from ${RUNNING_REF} (${RUNNING_REF_SHA}), but ${CANDIDATE_SHA} declares a different spec list. Re-dispatch with --ref set to a branch or tag containing ${CANDIDATE_SHA}." >&2
             exit 1
           fi
           echo "OK: ${#candidate[@]} spec file(s) — running workflow equals the candidate SHA's declared list."
@@ -217,14 +241,26 @@ jobs:
           # another, so a plain `mapfile -t specs <<< "$CERT_SPECS"` appends an
           # empty element — `${#specs[@]}` would be 5 for 4 declared specs and this
           # step would fail on every run. Verified against the real value.
-          mapfile -t specs < <(grep -oE 'e2e/[a-z0-9-]+\.spec\.ts' <<< "${CERT_SPECS:-}")
+          #
+          # The pattern must match every path the CU block allows (uppercase,
+          # underscores, sub-directories), or a declared spec would be dropped
+          # here and never run; the assertion step fails loudly in that case.
+          spec_path_pattern='e2e/[A-Za-z0-9_./-]+\.spec\.ts'
+          mapfile -t specs < <(grep -oE "$spec_path_pattern" <<< "${CERT_SPECS:-}")
           if [ "${#specs[@]}" -eq 0 ]; then
             echo "::error::CERT_SPECS declares no specs; refusing to run an unbounded spec set" >&2
             exit 1
           fi
+          # Independent of the pattern: any declared line naming a spec that was
+          # not extracted would be silently skipped, so fail loudly instead.
+          stray="$(grep -E '\.spec\.ts' <<< "${CERT_SPECS:-}" | grep -vE "$spec_path_pattern" || true)"
+          if [ -n "$stray" ]; then
+            echo "::error::CERT_SPECS declares a spec path this step cannot extract (spec_path_pattern=${spec_path_pattern}): ${stray}" >&2
+            exit 1
+          fi
           # Still guard against a first-line-only reader: the declared line count
           # must equal the number of specs handed to Playwright.
-          declared="$(grep -cE 'e2e/[a-z0-9-]+\.spec\.ts' <<< "${CERT_SPECS:-}" || true)"
+          declared="$(grep -cE "$spec_path_pattern" <<< "${CERT_SPECS:-}" || true)"
           if [ "${#specs[@]}" -ne "$declared" ]; then
             echo "::error::expanded ${#specs[@]} spec(s) but ${declared} declared line(s); refusing to run a partial certification" >&2
             exit 1
