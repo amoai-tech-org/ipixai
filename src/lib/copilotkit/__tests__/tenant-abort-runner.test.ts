@@ -12,6 +12,7 @@ import type { BaseEvent, RunAgentInput } from "@ag-ui/client";
 
 import * as threadPersistence from "@/mastra/thread-persistence";
 import type { PlannerChatMessage } from "@/mastra/thread-persistence";
+import type { PlannerRunControl } from "../planner-run-control";
 import { TenantAbortRunner } from "../tenant-abort-runner";
 
 /** Emits a minimal but valid AG-UI run so InMemoryAgentRunner records real
@@ -143,6 +144,39 @@ describe("TenantAbortRunner.connect()", () => {
     expect((events[1] as unknown as { messages: PlannerChatMessage[] }).messages).toEqual(
       history,
     );
+  });
+
+  it("starts durable history loading while remote discovery is still pending", async () => {
+    let resolveRemote!: (value: null) => void;
+    const remotePending = new Promise<null>((resolve) => {
+      resolveRemote = resolve;
+    });
+    const getMemory = vi.spyOn(threadPersistence, "getPlannerMemory").mockResolvedValue(
+      {} as unknown as Awaited<ReturnType<typeof threadPersistence.getPlannerMemory>>,
+    );
+    vi.spyOn(threadPersistence, "recallPlannerChatMessages").mockResolvedValue(history);
+    const connect = vi.fn(() => remotePending);
+    const runControl = { connect } as unknown as PlannerRunControl;
+    const runner = new TenantAbortRunner(
+      ORG_A_RESOURCE,
+      new AbortController().signal,
+      runControl,
+    );
+
+    const eventsPromise = firstValueFrom(
+      runner.connect({ threadId: THREAD_ID }).pipe(toArray()),
+    );
+
+    await vi.waitFor(() => expect(connect).toHaveBeenCalledWith(THREAD_ID));
+    await vi.waitFor(() => expect(getMemory).toHaveBeenCalledTimes(1));
+    resolveRemote(null);
+
+    const events = await eventsPromise;
+    expect(events.map((event) => event.type)).toEqual([
+      EventType.RUN_STARTED,
+      EventType.MESSAGES_SNAPSHOT,
+      EventType.RUN_FINISHED,
+    ]);
   });
 
   it("emits nothing when there is no durable history either (genuinely new/empty thread)", async () => {
