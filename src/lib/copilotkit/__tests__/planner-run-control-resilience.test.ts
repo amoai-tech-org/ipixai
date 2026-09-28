@@ -53,7 +53,7 @@ describe("PlannerRunControl resilience", () => {
       message: "planner_run_owner_closed",
     } as BaseEvent;
 
-    await (handle.close as (terminal?: BaseEvent) => Promise<void>)(fallback);
+    await handle.close(fallback);
 
     expect(received).toEqual([expect.objectContaining({ type: EventType.RUN_ERROR })]);
     await connection?.close();
