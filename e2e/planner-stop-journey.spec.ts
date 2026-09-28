@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 import { collectBrowserProblems, isAgentRun as isRun, isAgentStop as isStop } from "./support/browser-problems";
+import { collectCertThreadIds } from "./support/cert-trace";
 
 /**
  * IPI-1290 · COPILOTKIT-UPGRADE-001 — the real browser Stop journey.
@@ -33,6 +34,11 @@ test.describe("planner stop journey (authenticated) @S6b1f0290", () => {
   test("Stop ends only its own run; a late Stop(R1) leaves R2 running to completion", async ({ page }) => {
     test.setTimeout(RESPONSE_TIMEOUT_MS * 3 + NAV_TIMEOUT_MS * 6);
     const problems = collectBrowserProblems(page);
+    // Recorded before the first send so no Stop request can be missed. The
+    // provider-side log check requires this journey's own thread id to appear in
+    // the Production window it scans; CopilotKit traffic from other live
+    // operators must not be able to satisfy that check.
+    const certTrace = collectCertThreadIds(page);
     const marker = `r2-${Date.now().toString(36)}`;
 
     await page.goto("/app");
@@ -148,6 +154,18 @@ test.describe("planner stop journey (authenticated) @S6b1f0290", () => {
       followUpMarker,
       { timeout: RESPONSE_TIMEOUT_MS },
     );
+
+    // Published before the final assertion: a journey that fails on an
+    // unexpected problem still leaves the window it used on disk, so the log
+    // check reports against the real ids instead of failing as misconfigured.
+    // An empty trace is a hard failure — without a thread id the log check
+    // cannot tie the scanned window to this run, and a check that cannot tie
+    // them proves nothing.
+    const written = certTrace.write();
+    expect(
+      written.threadIds.length,
+      "the journey must name at least one Planner thread for the Production log check",
+    ).toBeGreaterThan(0);
 
     expect(problems, "no console errors, page errors, or 5xx during the journey").toEqual([]);
   });

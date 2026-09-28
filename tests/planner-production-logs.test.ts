@@ -3,8 +3,22 @@ import { describe, expect, it, vi } from "vitest";
 import {
   analyzePlannerProductionLogs,
   evaluatePlannerProductionLogs,
+  readCertThreadIdsFromTrace,
   runPlannerProductionLogCheck,
 } from "../scripts/check-planner-production-logs.mjs";
+
+/**
+ * The thread id the real certification named. Taken from live Production logs on
+ * 2026-09-28 (`POST /api/copilotkit/agent/default/stop/a965d188-…`) and from the
+ * matching `/api/planner/threads/<id>/messages` reads, so the fixture matches
+ * what the log check actually has to find rather than an invented shape.
+ */
+const CERT_THREAD_ID = "a965d188-06b2-4678-b82b-9af78fa66461";
+const OTHER_THREAD_ID = "b17c4e02-1111-4222-8333-444455556666";
+
+function traceJson(threadIds: string[] = [CERT_THREAD_ID]): string {
+  return `${JSON.stringify({ threadIds })}\n`;
+}
 
 /**
  * IPI-1332 · CERT-PROD-001 — the shapes below are copied from real
@@ -14,6 +28,9 @@ import {
  * set, resolved every status to `undefined`, and so reported "no 5xx" without
  * ever reading a status — the `detects a 5xx on the real vercel logs field
  * names` case below is the guard against repeating that.
+ *
+ * The default path is the Stop call, because that is the request that carries
+ * the certification's thread id in its URL.
  */
 function vercelLogEntry(overrides: Record<string, unknown> = {}) {
   return {
@@ -26,7 +43,7 @@ function vercelLogEntry(overrides: Record<string, unknown> = {}) {
     source: "serverless-middleware",
     domain: "www.ipix.co",
     requestMethod: "POST",
-    requestPath: "/api/copilotkit/agent/default/run",
+    requestPath: `/api/copilotkit/agent/default/stop/${CERT_THREAD_ID}`,
     responseStatusCode: 200,
     environment: "production",
     branch: "",
@@ -116,6 +133,82 @@ describe("planner production log check", () => {
     expect(verdict.problems.join(" ")).toContain("not observed");
   });
 
+  // The decisive guard. Live Production produces /api/copilotkit traffic from
+  // real operators whether or not this journey ran — measured on `479087b1`, a
+  // 30-second slice held ~1100 such requests while the journey makes 11 — so
+  // "some CopilotKit traffic was seen" can be satisfied by somebody else's
+  // session and would certify a window that never contained the run.
+  it("fails when the window holds copilotkit traffic but not this certification's thread", () => {
+    const summary = analyzePlannerProductionLogs(
+      asJsonLines([
+        vercelLogEntry({ requestPath: `/api/copilotkit/agent/default/stop/${OTHER_THREAD_ID}` }),
+        vercelLogEntry({ requestPath: "/api/copilotkit/agent/default/run" }),
+      ]),
+      { certThreadIds: [CERT_THREAD_ID] },
+    );
+    const verdict = evaluatePlannerProductionLogs(summary);
+
+    expect(summary.copilotkitRequests).toBe(2);
+    expect(summary.certThreadHits).toEqual([]);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.problems.join(" ")).toContain("does not contain the certification");
+  });
+
+  it("passes when the certification's own thread appears in the window", () => {
+    const summary = analyzePlannerProductionLogs(
+      asJsonLines([
+        vercelLogEntry({ requestPath: `/api/copilotkit/agent/default/stop/${CERT_THREAD_ID}` }),
+        vercelLogEntry({ requestPath: `/api/planner/threads/${CERT_THREAD_ID}/messages` }),
+      ]),
+      { certThreadIds: [CERT_THREAD_ID] },
+    );
+
+    expect(summary.certThreadHits).toEqual([CERT_THREAD_ID]);
+    expect(evaluatePlannerProductionLogs(summary).ok).toBe(true);
+  });
+
+  // `vercel logs` returns the newest --limit entries, so reaching the ceiling
+  // drops the OLDEST entries rather than the journey — and the thread-id guard
+  // independently proves the journey is inside the window. Reported, not gated:
+  // failing here would reject a window that demonstrably contains the run.
+  it("warns without failing when the scan reached the limit", () => {
+    const summary = analyzePlannerProductionLogs(
+      asJsonLines(Array.from({ length: 50 }, () => vercelLogEntry())),
+      { certThreadIds: [CERT_THREAD_ID] },
+    );
+
+    const reached = evaluatePlannerProductionLogs(summary, { maxEntries: 50 });
+    expect(reached.ok, "a window containing the certification must not fail on volume").toBe(true);
+    expect(reached.warnings.join(" ")).toContain("ceiling");
+
+    expect(evaluatePlannerProductionLogs(summary, { maxEntries: 5000 }).warnings).toEqual([]);
+  });
+
+  // Evidence for the run log: the span actually scanned is the only honest
+  // statement of what the 5xx count covers.
+  it("reports the window span it actually scanned", () => {
+    const summary = analyzePlannerProductionLogs(
+      asJsonLines([
+        vercelLogEntry({ timestamp: 1790552958000 }),
+        vercelLogEntry({ timestamp: 1790552958225 }),
+      ]),
+    );
+
+    expect(summary.windowStartMs).toBe(1790552958000);
+    expect(summary.windowEndMs).toBe(1790552958225);
+    expect(analyzePlannerProductionLogs("{}").windowStartMs).toBeNull();
+  });
+
+  it("reads thread ids from the certification trace and rejects junk", () => {
+    expect(readCertThreadIdsFromTrace(traceJson())).toEqual([CERT_THREAD_ID]);
+    expect(readCertThreadIdsFromTrace(traceJson([CERT_THREAD_ID.toUpperCase()]))).toEqual([
+      CERT_THREAD_ID,
+    ]);
+    expect(readCertThreadIdsFromTrace("not json")).toEqual([]);
+    expect(readCertThreadIdsFromTrace(JSON.stringify({ threadIds: "nope" }))).toEqual([]);
+    expect(readCertThreadIdsFromTrace("")).toEqual([]);
+  });
+
   it("reports non-copilotkit 5xx without gating on them", () => {
     const summary = analyzePlannerProductionLogs(
       asJsonLines([
@@ -130,14 +223,30 @@ describe("planner production log check", () => {
   });
 
   describe("runPlannerProductionLogCheck", () => {
+    const TRACE_PATH = "/tmp/planner-cert-trace.json";
+
     // `NODE_ENV` is required by Next.js's `ProcessEnv` augmentation, so build a
-    // complete env rather than spreading a partial one.
-    function run(text: string | Error, overrides: Record<string, string> = {}) {
+    // complete env rather than spreading a partial one. `readFile` is
+    // path-aware because the check now reads two files: the log dump and the
+    // certification trace.
+    function run(
+      text: string | Error,
+      { traceText = traceJson(), env = {} }: { traceText?: string | null; env?: Record<string, string> } = {},
+    ) {
       const log = vi.fn();
       const error = vi.fn();
       const result = runPlannerProductionLogCheck({
-        env: { NODE_ENV: "test", PROD_LOG_FILE: "/tmp/logs.jsonl", ...overrides },
-        readFile: () => {
+        env: {
+          NODE_ENV: "test",
+          PROD_LOG_FILE: "/tmp/logs.jsonl",
+          CERT_TRACE_FILE: TRACE_PATH,
+          ...env,
+        },
+        readFile: (path: string) => {
+          if (path === TRACE_PATH) {
+            if (traceText === null) throw new Error("ENOENT: no such file");
+            return traceText;
+          }
           if (text instanceof Error) throw text;
           return text;
         },
@@ -168,7 +277,33 @@ describe("planner production log check", () => {
 
     it("exits 2 when the log file is missing or unreadable", () => {
       expect(run(new Error("ENOENT")).result.exitCode).toBe(2);
-      expect(run("", { PROD_LOG_FILE: "" }).result.exitCode).toBe(2);
+      expect(run("", { env: { PROD_LOG_FILE: "" } }).result.exitCode).toBe(2);
+    });
+
+    // Without the certification's thread ids this check cannot tell its own
+    // traffic from any other live operator's, so it refuses to run at all
+    // rather than report a pass it cannot support.
+    it("exits 2 when the certification trace is missing, unreadable or empty", () => {
+      const unset = run(asJsonLines([vercelLogEntry()]), { env: { CERT_TRACE_FILE: "" } });
+      expect(unset.result.exitCode).toBe(2);
+      expect(unset.error.mock.calls.flat().join(" ")).toContain("CERT_TRACE_FILE is required");
+
+      expect(run(asJsonLines([vercelLogEntry()]), { traceText: null }).result.exitCode).toBe(2);
+      expect(run(asJsonLines([vercelLogEntry()]), { traceText: traceJson([]) }).result.exitCode).toBe(2);
+    });
+
+    it("exits 1 when the window does not contain the certification's own thread", () => {
+      const { result, error } = run(
+        asJsonLines([vercelLogEntry({ requestPath: `/api/copilotkit/agent/default/stop/${OTHER_THREAD_ID}` })]),
+      );
+      expect(result.exitCode).toBe(1);
+      expect(error.mock.calls.flat().join(" ")).toContain("does not contain the certification");
+    });
+
+    it("exits 0 but warns when the scan hit the configured limit", () => {
+      const { result, log } = run(asJsonLines([vercelLogEntry()]), { env: { PROD_LOG_LIMIT: "1" } });
+      expect(result.exitCode).toBe(0);
+      expect(log.mock.calls.flat().join(" ")).toContain("::warning::");
     });
 
     it("warns about non-copilotkit 5xx while still passing", () => {
