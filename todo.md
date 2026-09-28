@@ -8,13 +8,11 @@ Linear is the authoritative task/status source: https://linear.app/amo100/projec
 
 ## Current
 
-- IPI-1294 · LINEAR-WORKFLOW-001 — Standardize Linear, GitHub, Docs, TODO, and Changelog Workflow
-- Branch: `ipi-1294-postmerge-handoff`
-- PR: https://github.com/amoai-tech/ipixai/pull/259
-- State: PR #258 is merged and exact-main certified. The four approved Linear execution templates now use the full canonical external-reference contract, and the stale rule-only `reuse-rule-linear-task` template is retired. Live template inventory is exactly four.
-- Last proof: exact-main CI #1285 passed on the PR #258 merge SHA; `test:skills` is 13/13 and docs validation is 72 active files with 0 broken local links. Durable SHA/CI/template evidence is recorded in IPI-1294 and PR #258.
-- Remaining blocker: Linear team Git automations are configured correctly (`start → In Progress`, `review → In Review`, `merge → Done`), but Linear Reviews/Diffs does not currently discover `amoai-tech/ipixai`; a documented PR-state resync did not change IPI-1294 from In Progress.
-- Next action: use this focused follow-up PR as a fresh `IPI-1294` integration probe. If Linear still does not discover it or move the issue to In Review, grant `amoai-tech/ipixai` repository/code access to the existing Linear GitHub integration, then repeat the probe before marking IPI-1294 Done.
+- No task branch is in flight. The two governance closeouts merged and were post-merge verified on `main`.
+- State: PR #302 (`98f4dd3`, merge authority) and PR #303 (`dec9d24`, local-`main` synchronization) are merged and certified on `main`.
+- Last proof: `main` = `dec9d24ea50879c2fec90897c7fff6b57fa7a8b7`; main-branch CI green on that revision; `npm run test:skills` 14/14; `npm run typecheck` exit 0; `git rev-list --left-right --count main...origin/main` = `0 0`.
+- Remaining blocker: none for the merged governance work itself. **One residual is carried explicitly rather than dismissed:** IPI-1294 is `In Review` with no open PR, because its follow-up probe #261 was closed as superseded by #303. It is recorded on IPI-1294 itself so it outlives this handoff, and it must not be left `In Review` without a PR.
+- Next action: first close out the IPI-1294 residual — open a fresh minimal probe PR or move its status — because leaving a task `In Review` with no PR is exactly the tracker inconsistency this handoff exists to prevent. Then start the next task per the tracker’s recorded sequencing decision: IPI-1117 · HOST-RUNNER-001, reproduce first, no production code unless the defect reproduces.
 
 ## Durable sources
 
