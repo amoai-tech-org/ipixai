@@ -52,7 +52,7 @@ When docs, legacy code, and runtime disagree:
 
 ### 1.2 Stack truth (this repo)
 
-**Today `[VERIFIED]`:** Next.js App Router + CopilotKit v2 (`/api/copilotkit`) + AG-UI + Mastra are implemented. The current package family is Next.js `16.1.2`, CopilotKit `1.68.1`, `@ag-ui/mastra` `1.1.4`, and `@mastra/core` `1.63.2`. Hosted Mastra uses guarded `PostgresStore` storage in the private `mastra` schema (`schemaName: "mastra"`, `disableInit: true`) when `MASTRA_DATABASE_URL` is configured; hosted mode fails closed if that database is missing or unapproved. Local development may fall back to in-memory LibSQL. CopilotKit identity/resource scope is derived server-side by the authenticated planner session; the old `demo-user` bootstrap path is gone.
+**Today `[VERIFIED]`:** Next.js App Router + CopilotKit v2 (`/api/copilotkit`) + AG-UI + Mastra are implemented. The pinned package family is recorded in [`docs/mastra/runtime-family.md`](mastra/runtime-family.md) — that file and `package.json` are the only places a runtime version is written down, so this paragraph does not restate it. Hosted Mastra uses guarded `PostgresStore` storage in the private `mastra` schema (`schemaName: "mastra"`, `disableInit: true`) when `MASTRA_DATABASE_URL` is configured; hosted mode fails closed if that database is missing or unapproved. Local development may fall back to in-memory LibSQL. CopilotKit identity/resource scope is derived server-side by the authenticated planner session; the old `demo-user` bootstrap path is gone.
 
 **Production runtime shape `[REQUIRED]`:**
 

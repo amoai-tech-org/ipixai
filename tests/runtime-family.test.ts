@@ -247,3 +247,125 @@ describe("IPI-1042 weather tool", () => {
     });
   });
 });
+
+/**
+ * IPI-1368 · DOC-PINS-001 — documented runtime pins must track the installed family.
+ *
+ * The drift this prevents is not hypothetical. `docs/prd.md` claimed Next.js
+ * `16.1.2` / CopilotKit `1.68.1` / `@mastra/core` `1.63.2`, and
+ * `github/mastra/mastra-repos.md` claimed CopilotKit `1.68.1` / `@mastra/core`
+ * `1.41.0`, long after the repository had moved on — so a developer reading either
+ * would write against APIs the installed runtime no longer has.
+ *
+ * Structure, not prose: the canonical table is parsed row by row, and the two
+ * living docs are required to *point at* it rather than restate it. Asserting a
+ * prose sentence would pin wording instead of truth and would break on any edit.
+ */
+/** The body under an exact heading line, up to the next heading of any level. */
+function sectionUnder(text: string, heading: string): string {
+  const lines = text.split("\n");
+  const start = lines.findIndex((line) => line.trim() === heading);
+  if (start === -1) return "";
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^#{1,6} /.test(line));
+  return (end === -1 ? rest : rest.slice(0, end)).join("\n");
+}
+
+/** Everything before the first `##` heading. */
+function preambleOf(text: string): string {
+  const lines = text.split("\n");
+  const end = lines.findIndex((line) => /^## /.test(line));
+  return (end === -1 ? lines : lines.slice(0, end)).join("\n");
+}
+
+describe("documented runtime pins match the installed family (IPI-1368)", () => {
+  const read = (relativePath: string) =>
+    readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
+
+  const installedVersion = (name: string) =>
+    (
+      JSON.parse(
+        readFileSync(new URL(`../node_modules/${name}/package.json`, import.meta.url), "utf8"),
+      ) as { version: string }
+    ).version;
+
+  const FAMILY = [
+    "@copilotkit/runtime",
+    "@copilotkit/react-core",
+    "@copilotkit/channels",
+    "@ag-ui/client",
+    "@ag-ui/mastra",
+    "@mastra/core",
+    "@mastra/memory",
+    "@mastra/pg",
+    "@mastra/client-js",
+    "mastra",
+  ] as const;
+
+  it("the canonical table matches every installed family package", () => {
+    const table = read("docs/mastra/runtime-family.md");
+    const mismatched = FAMILY.flatMap((name) => {
+      const escaped = name.replace(/[/@]/g, "\\$&");
+      const row = new RegExp(`\\|\\s*\`${escaped}\`\\s*\\|\\s*([0-9][^\\s|]*)\\s*\\|`).exec(table);
+      const installed = installedVersion(name);
+      const documented = row?.[1];
+      if (documented === undefined) return [{ name, documented: "(no row)", installed }];
+      return documented === installed ? [] : [{ name, documented, installed }];
+    });
+    expect(
+      mismatched,
+      "A row in docs/mastra/runtime-family.md disagrees with the installed package. " +
+        "That table is the single place a runtime version is written down; update it " +
+        "when the pinned family changes.",
+    ).toEqual([]);
+  });
+
+  it("iPix's own family statement does not restate a version", () => {
+    // A reader-facing label paired with the version actually installed for it.
+    // `next` is included because the PRD named a Next.js version too.
+    const labelled: Array<[string, string]> = [
+      ["Next.js", installedVersion("next")],
+      ["CopilotKit", installedVersion("@copilotkit/runtime")],
+      ["@ag-ui/mastra", installedVersion("@ag-ui/mastra")],
+      ["@mastra/core", installedVersion("@mastra/core")],
+      ["@mastra/pg", installedVersion("@mastra/pg")],
+    ];
+    // Scope matters. These documents legitimately record *upstream* versions —
+    // `mastra-repos.md` notes that `mastra-ai/ui-dojo` "uses Core `1.50.0` and
+    // CopilotKit `1.62.1`, not the iPix family". Flagging those would be a false
+    // positive and would push real third-party context out of the file. So the
+    // rule applies only to the region where the document speaks for iPix.
+    const regions: Array<[string, string]> = [
+      ["docs/prd.md", sectionUnder(read("docs/prd.md"), "### 1.2 Stack truth (this repo)")],
+      ["github/mastra/mastra-repos.md", preambleOf(read("github/mastra/mastra-repos.md"))],
+    ];
+    const restated = regions.flatMap(([path, text]) =>
+      labelled.flatMap(([label, installed]) => {
+        const near = new RegExp(
+          `${label.replace(/[/@.]/g, "\\$&")}[^\\n]{0,24}?\`(\\d+\\.\\d+\\.\\d+)\``,
+        ).exec(text);
+        const documented = near?.[1];
+        return documented === undefined ? [] : [{ path, label, documented, installed }];
+      }),
+    );
+    expect(
+      restated,
+      "An iPix family statement restates a runtime pin. Point at " +
+        "docs/mastra/runtime-family.md instead: two copies is how they drift apart.",
+    ).toEqual([]);
+  });
+
+  it("still locates the iPix family statements it guards", () => {
+    // Without this, renaming either heading would silently empty the region and
+    // make the assertion above vacuously true — the failure mode this repository
+    // has hit more than once.
+    expect(
+      sectionUnder(read("docs/prd.md"), "### 1.2 Stack truth (this repo)").length,
+      "The `### 1.2 Stack truth (this repo)` section was renamed or removed.",
+    ).toBeGreaterThan(0);
+    expect(
+      preambleOf(read("github/mastra/mastra-repos.md")).length,
+      "github/mastra/mastra-repos.md no longer has a preamble before its first `##`.",
+    ).toBeGreaterThan(0);
+  });
+});
