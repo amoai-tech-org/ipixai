@@ -149,13 +149,24 @@ export class PlannerRunControl {
   ): Promise<PlannerRunOwnerHandle> {
     const bus = await this.openBus(threadId);
     const stopRequests = new Map<string, Promise<StopAck>>();
+    const connectRequests = new Set<string>();
+    const replayBuffer: BaseEvent[] = [];
     let remoteListener = false;
     let closed = false;
+    let sendQueue = Promise.resolve();
+    const enqueue = (message: PlannerRunControlMessage): Promise<void> => {
+      const send = sendQueue.then(() => {
+        if (closed) return;
+        return bus.send(message);
+      });
+      sendQueue = send.catch(() => undefined);
+      return send;
+    };
     const off = bus.onMessage((message) => {
       const respond = async () => {
         if (closed) return;
         if (message.kind === "probe") {
-          await bus.send({
+          await enqueue({
             kind: "probe_ack",
             requestId: message.requestId,
             runId,
@@ -165,12 +176,26 @@ export class PlannerRunControl {
         }
         if (message.kind === "connect") {
           remoteListener = true;
-          await bus.send({
+          const firstDelivery = !connectRequests.has(message.requestId);
+          connectRequests.add(message.requestId);
+
+          // Queue the ACK and its replay snapshot synchronously. A publish that
+          // races this handler is therefore ordered after the replay instead of
+          // overtaking it. Retries reuse the same requestId, so they resend only
+          // the ACK: any replay events delivered before a lost ACK are already
+          // buffered by the controller and must not be duplicated.
+          let response = enqueue({
             kind: "connect_ack",
             requestId: message.requestId,
             runId,
             ownerInstanceId: this.instanceId,
           });
+          if (firstDelivery) {
+            for (const event of replayBuffer) {
+              response = enqueue({ kind: "event", runId, event });
+            }
+          }
+          await response;
           return;
         }
         if (message.kind === "stop") {
@@ -190,7 +215,7 @@ export class PlannerRunControl {
             stopRequests.set(message.requestId, response);
           }
           const ack = await response;
-          if (!closed) await bus.send(ack);
+          if (!closed) await enqueue(ack);
         }
       };
       void respond().catch((error) => {
@@ -203,15 +228,23 @@ export class PlannerRunControl {
 
     return {
       publish: async (event) => {
-        if (!closed && remoteListener) {
-          await bus.send({ kind: "event", runId, event });
+        if (closed) return;
+        // Match CopilotKit's active-run ReplaySubject semantics for a remote
+        // reconnect: a controller receives the run from its beginning, then
+        // continues with live events. The buffer lives only for this active run.
+        replayBuffer.push(event);
+        if (remoteListener) {
+          await enqueue({ kind: "event", runId, event });
         }
       },
       close: async () => {
         if (closed) return;
         closed = true;
         stopRequests.clear();
+        connectRequests.clear();
+        replayBuffer.length = 0;
         off();
+        await sendQueue.catch(() => undefined);
         await bus.close();
       },
     };
