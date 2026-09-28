@@ -10,7 +10,7 @@ The C4 model provides a hierarchical way to visualize software architecture at d
   - [Elements](#elements)
   - [Comprehensive Context Example](#comprehensive-context-example)
 - [C4 Container Diagram](#c4-container-diagram)
-  - [Basic Syntax](#basic-syntax-1)
+  - [Basic Syntax](#basic-syntax-2)
   - [Container Elements](#container-elements)
   - [Container Boundaries](#container-boundaries)
   - [Comprehensive Container Example](#comprehensive-container-example)

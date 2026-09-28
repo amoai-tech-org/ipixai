@@ -3,7 +3,11 @@ name: worktrees
 description: >
   Git worktree isolation workflow for iPix development — when and how to create, use, and clean up
   worktrees for parallel/multi-step work, iPix branch/directory conventions, safety rails (merge
-  gate, forensic audit, documentation preservation), and troubleshooting.
+  gate, forensic audit, documentation preservation), and troubleshooting. Use whenever you are about
+  to start multi-step or parallel work that must not disturb the current checkout, need an isolated
+  branch or directory for a task, are cleaning up finished worktrees, or hit a worktree/branch
+  conflict — including when the request never says "worktree" but the work plainly spans several
+  steps from a clean `origin/main`.
 ---
 
 # Git Worktrees

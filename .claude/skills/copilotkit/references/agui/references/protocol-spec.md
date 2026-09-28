@@ -9,7 +9,7 @@
 - [State Management Events](#state-management-events)
 - [Activity Events](#activity-events)
 - [Reasoning Events](#reasoning-events)
-- [Custom / Extension Events](#custom-extension-events)
+- [Custom / Extension Events](#custom--extension-events)
 - [Deprecated Events (Remove in 1.0.0)](#deprecated-events-remove-in-100)
 - [Transport Encoding](#transport-encoding)
 - [Type Definitions (RunAgentInput)](#type-definitions-runagentinput)

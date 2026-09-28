@@ -1,6 +1,6 @@
 ---
 name: qa-pr-analysis
-description: Analyze a pull request from both requirements intent and code-diff perspectives. Use to answer what a PR is supposed to do, what it actually changes, whether scope matches the linked ticket, and to derive testable acceptance criteria without performing a full code review.
+description: Analyze a pull request from both requirements intent and code-diff perspectives. Use when someone asks what a PR is supposed to do, whether it actually does it, whether its scope matches the linked ticket, or what to test — and to derive testable acceptance criteria from a diff without performing a full code review. Use it even when the request is phrased as "is this PR any good?", "does this match the ticket?", or "what should I check before merging?" rather than as an explicit PR-analysis request.
 license: MIT
 metadata:
   source: consolidated from testomatio/skills qa-pr-requirements-analyzer + pull-request-diff-analyzer

@@ -6,7 +6,7 @@
 - [Tool Call Flow](#tool-call-flow)
 - [State Synchronization](#state-synchronization)
 - [Activity Updates](#activity-updates)
-- [Human-in-the-Loop (Interrupt + Resume)](#human-in-the-loop-interrupt-resume)
+- [Human-in-the-Loop (Interrupt + Resume)](#human-in-the-loop-interrupt--resume)
 - [Error Handling](#error-handling)
 - [Reasoning Flow](#reasoning-flow)
 - [Multiple Sequential Runs](#multiple-sequential-runs)

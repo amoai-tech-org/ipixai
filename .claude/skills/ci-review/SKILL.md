@@ -1,6 +1,6 @@
 ---
 name: ci-review
-description: Review iPix GitHub Actions and verification scripts for trust-boundary, permissions, secret, exact-head, and false-green regressions.
+description: Review iPix GitHub Actions workflows and verification scripts for trust-boundary, permissions, secret, exact-head, and false-green regressions. Use whenever a workflow file, a CI gate, a required check, a production-release job, or a `scripts/*.mjs` verification script is added, changed, or reviewed — and whenever a test could pass without proving the behaviour it claims. Also reach for it when workflow permissions, secrets, or a trust boundary are touched, even if the request never mentions CI or Actions.
 metadata:
   owner: IPI-1246
   impact: HIGH
