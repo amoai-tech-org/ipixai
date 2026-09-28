@@ -64,7 +64,7 @@ Reuse Claude Code bundled skills instead of recreating them when available:
 
 These are evidence producers, not Done authorities. `task-verifier` still decides whether the accumulated evidence is sufficient for merge safety / Done.
 
-After PR #106 merges, run `/run-skill-generator` from clean `main` once to record the real iPix startup recipe. Then run `/skill-doctor` locally to find unused/high-context skills and tune descriptions or visibility.
+To capture a repeatable iPix startup recipe as a project skill, or to tune skill descriptions and visibility, use the Claude-provided `skill-creator` skill. This repository ships no `/run-skill-generator` or `/skill-doctor` command; skill structure, triggering, indexing, and provenance are enforced by `npm run skills:registry:check`, `npm run skills:index:check`, `npm run skills:vendor:check`, and `npm run test:skills`.
 
 ## Output
 

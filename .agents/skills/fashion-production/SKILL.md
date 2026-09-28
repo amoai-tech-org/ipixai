@@ -64,10 +64,10 @@ Direction ──→ Shot List ──→ Styling ──→ Capture specs ──�
 ### Related sibling skills (not folded in)
 | Task | Skill |
 |------|-------|
-| Pre-build creative exploration / requirements | [`brainstorming`](../archive/brainstorming/SKILL.md) (generic, not shoot-specific) |
-| Web/UI boutique theme styling (typography, components) | [`fashion-styling`](../archive/fashion-styling/SKILL.md) (UI theming — **not** shoot styling) |
+| Pre-build creative exploration / requirements | [`brainstorming`](../brainstorming/SKILL.md) (generic, not shoot-specific) |
+| Web/UI boutique theme styling (typography, components) | [`ipix-wireframe`](../ipix-wireframe/SKILL.md) for the screen spec + [`nextjs-developer`](../nextjs-developer/SKILL.md) for implementation (UI theming only — **not** shoot styling) |
 | Shoot data model, wizard, DNA handoff | `docs/prd/shoot-prd.md` |
-| iPix domain routing | [`ipix`](../ipix/SKILL.md) |
+| iPix task lifecycle and repo routing | [`tasks`](../tasks/SKILL.md) |
 
 ---
 

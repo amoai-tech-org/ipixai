@@ -1,6 +1,7 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, extname, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { dirname, extname, join, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
+import { discoverVendoredRoots } from "../scripts/skills-vendor-baseline.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const agentsRoot = resolve(repoRoot, ".agents/skills");
@@ -20,10 +21,33 @@ function filesUnder(root: string, extensions: Set<string>): string[] {
   return out;
 }
 
-function canonicalSkillFiles(): string[] {
+// A hash-locked vendored tree must not be edited in place, so it cannot be held to a
+// content contract that only an edit could satisfy. Exclude it here for the same reason
+// `skills-reference-anchors.test.ts` excludes it: its link rot belongs upstream, and a
+// frozen file under a fixable-content rule produces an unfixable red check. IPI-1374.
+const vendoredRealRoots = new Set(
+  discoverVendoredRoots(repoRoot).map((root) => {
+    try {
+      return realpathSync(join(repoRoot, root.path));
+    } catch {
+      return join(repoRoot, root.path);
+    }
+  }),
+);
+
+function isVendored(file: string): boolean {
+  const real = realpathSync(file);
+  return [...vendoredRealRoots].some((root) => real === root || real.startsWith(root + sep));
+}
+
+function allCanonicalSkillFiles(): string[] {
   return readdirSync(agentsRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && existsSync(resolve(agentsRoot, entry.name, "SKILL.md")))
     .map((entry) => resolve(agentsRoot, entry.name, "SKILL.md"));
+}
+
+function canonicalSkillFiles(): string[] {
+  return allCanonicalSkillFiles().filter((file) => !isVendored(file));
 }
 
 function bodyWithoutFrontmatter(text: string): string {
@@ -44,6 +68,17 @@ const deprecatedSkills = new Set([
 ]);
 
 describe("skill reference integrity", () => {
+  it("skips only hash-locked trees and still checks the iPix-maintained majority", () => {
+    const all = allCanonicalSkillFiles();
+    const checked = canonicalSkillFiles();
+    const skipped = all.filter(isVendored);
+    // Non-vacuity: the exclusion must actually match vendored trees...
+    expect(skipped.length).toBeGreaterThan(0);
+    expect(checked.length + skipped.length).toBe(all.length);
+    // ...and must not swallow the tree it is meant to leave checked.
+    expect(checked.length).toBeGreaterThan(skipped.length);
+  });
+
   it("does not route canonical skill handoffs to removed or unknown skill names", () => {
     const offenders: string[] = [];
     const routePatterns = [

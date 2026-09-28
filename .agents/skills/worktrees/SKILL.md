@@ -20,10 +20,10 @@ A git worktree is a second working directory with its own files and branch that 
 
 ## Agent Start Gate (required before writing code in an existing worktree)
 
-A real incident: an agent hit a build error that was already fixed on `origin/main` — the local worktree was just 17 commits behind and never got the fix. Before any implementation in a worktree you didn't just create fresh, verify all of the following (or run `npm run worktree:health`, which checks the first two automatically):
+A real incident: an agent hit a build error that was already fixed on `origin/main` — the local worktree was just 17 commits behind and never got the fix. Before any implementation in a worktree you didn't just create fresh, verify all of the following:
 
 - **Not behind `origin/main`** beyond what you're deliberately working from an older base for. `git fetch origin && git rev-list --left-right --count HEAD...origin/main`.
-- **No stale known-bad patterns** — e.g. `rg 'from "\.\./\.\./\.\./\.\./config/groq-models\.json"' app/src/lib/ai/provider.ts` (the pre-IPI-428 bug; `worktree-health.mjs` checks this by default).
+- **No stale known-bad patterns** — e.g. an import of the old shared `config/groq-models.json` (the pre-IPI-428 bug).
 - **Correct worktree for the task** — `git branch --show-current` matches what you intend to work on.
 - **State is clean, or intentionally dirty** — `git status --short`; know what's yours before touching anything.
 - **Docs/specs aren't "missing" due to staleness** — if a file exists on `origin/main` but not locally, that means the checkout is stale, not that the doc needs recreating. Verify with `git show origin/main:<path>` before concluding a doc is missing, and never recreate a doc without first fetching/rebasing to confirm it's genuinely absent upstream.
@@ -45,30 +45,25 @@ For iPix work, use a worktree for any **multi-step implementation task** (anythi
 - **Directory:** `../wt-ipi-<task-id>-<short-name>` (sibling of the repo) — e.g. `../wt-ipi-22-ui-shell`
 
 ```bash
-# Preferred — repo script (naming, nested guard, .worktreeinclude, npm ci)
-npm run worktree:add -- IPI-286 route-aware-sections
-cd ../wt-ipi-286-route-aware-sections
-
-# Manual equivalent
 git fetch origin main
 git worktree add ../wt-ipi-286-route-aware-sections -b ipi/286-route-aware-sections origin/main
 cd ../wt-ipi-286-route-aware-sections
-# copy env: see .worktreeinclude (or npm run worktree:add does this)
-cd app && npm ci && cd ..
+# link the env files the app needs — never copy secret values into a new tree
+for f in .env.local .env.keys .env.test; do ln -sf "/path/to/primary/$f" "$f"; done
+npm ci
 ```
 
-**Before adding:** `npm run worktree:audit` — check count, orphans, merged/stale trees ([docs/development/worktree-tracker.md](../../../docs/development/worktree-tracker.md)).
+**Before adding:** `git worktree list` — check the count and remove merged or abandoned trees with `git worktree remove` + `git worktree prune` (target ≤ ~3–4 active trees).
 
 **Default validation** — run **in the worktree**, matched to changed paths ([tasks pre-merge-tests](../tasks/references/pre-merge-tests.md)):
 
 | Changed | Commands |
 |---------|----------|
-| **`app/**`** (most iPix tasks) | `cd app && npm ci && npm run lint && npm run typecheck && npm test` · `npm run build` when routes/config/env/middleware touched |
-| **`supabase/**`** | Local fresh replay: `supabase start` → `supabase db reset --local` · run affected targeted SQL/security tests · CI `supabase-fresh-replay` is the global gate |
-| **Legacy `src/**`** (retiring) | `npm run build && npm run test` |
-| **Docs-only** | No app build required — still run [forensic audit](references/ipix-ops.md#forensic-audit) |
+| **`src/**`** (most iPix tasks) | `npm ci && npm run typecheck && npm test` · `npm run build` when routes/config/env/middleware touched |
+| **`supabase/**`** | Local fresh replay: `npm run supabase:cli -- start` → `npm run supabase:cli -- db reset --local` · run affected targeted SQL/security tests · CI `supabase-fresh-replay` is the global gate |
+| **`.agents/skills/**`, docs-only** | `npm test` · `npm run docs:check` — no app build required; still run [forensic audit](references/ipix-ops.md#forensic-audit) |
 
-> Root `package.json` has **no** `lint`/`test`/`build` — those live under `app/`. Pre-push hook runs root typecheck/tests only where configured; **operator PRs gate on `app/` scripts.**
+> This repository has one package manifest, at the root — there is no `app/` workspace, and there is no `lint` script. `typecheck`, `test`, and `build` all run from the repository root.
 
 **Hard rules (iPix):**
 
@@ -84,8 +79,8 @@ Always-on guardrails for iPix worktree work. Command recipes for the longer ones
 
 Before opening a PR, merging, or flipping a task to Done — all must hold, or it's "looks done" but broken:
 
-- [ ] Area verify matrix green ([tasks pre-merge-tests](../tasks/references/pre-merge-tests.md)) — typically `cd app && lint · typecheck · test` (+ build if applicable)
-- [ ] Supabase verify when `supabase/**` touched: local fresh replay (`supabase start` + `supabase db reset --local`) plus affected targeted SQL/security tests; CI `supabase-fresh-replay` must pass
+- [ ] Area verify matrix green ([tasks pre-merge-tests](../tasks/references/pre-merge-tests.md)) — typically `npm run typecheck && npm test` (+ `npm run build` if applicable)
+- [ ] Supabase verify when `supabase/**` touched: local fresh replay (`npm run supabase:cli -- start` + `npm run supabase:cli -- db reset --local`) plus affected targeted SQL/security tests; CI `supabase-fresh-replay` must pass
 - [ ] [Forensic audit](references/ipix-ops.md#forensic-audit) clean — no unexpected dirty or untracked files
 - [ ] [Production SHA check](references/ipix-ops.md#production-sha-check) — base is current `origin/main`, local `main` not diverged
 - [ ] No leaked dirs in the diff (see Leak guard below)
@@ -118,7 +113,7 @@ Only then `git worktree remove --force`. A 10-second backup beats unrecoverable 
 
 > **Clean working tree does not mean safe to delete.** A worktree can be clean and still contain unpushed commits with valuable docs.
 
-**The quieter danger: committed-but-never-pushed commits need no `--force` at all.** A plain `git worktree remove` succeeds fine on a *clean* working tree — but "clean" only means no uncommitted changes, not that the branch's commits exist anywhere else. If you `git add && git commit` a doc/note/fix in a worktree and never push it, the worktree directory can be removed with zero warnings; the commits survive on the branch ref for now, but become truly unrecoverable the moment that branch is later deleted (e.g. a routine "clean up merged branches" pass). Run **`npm run worktree:pre-delete`** before removing any worktree you didn't just finish pushing — it hard-blocks when the current branch has commits `origin/<branch>` doesn't have.
+**The quieter danger: committed-but-never-pushed commits need no `--force` at all.** A plain `git worktree remove` succeeds fine on a *clean* working tree — but "clean" only means no uncommitted changes, not that the branch's commits exist anywhere else. If you `git add && git commit` a doc/note/fix in a worktree and never push it, the worktree directory can be removed with zero warnings; the commits survive on the branch ref for now, but become truly unrecoverable the moment that branch is later deleted (e.g. a routine "clean up merged branches" pass). Run **`git log --oneline origin/<branch>..HEAD`** before removing any worktree you didn't just finish pushing — any commit it lists exists only on that local branch.
 
 ### Documentation preservation gate (mandatory — P0)
 
@@ -135,8 +130,6 @@ git -C <worktree> status --short
 git -C <worktree> ls-files --others --exclude-standard
 git -C <worktree> diff --name-only
 git -C <worktree> log --oneline origin/main..HEAD
-npm run worktree:pre-delete
-node scripts/worktree-health.mjs --pre-delete
 ```
 
 Check especially:
@@ -169,9 +162,9 @@ Before removal:
 
 1. Confirm the PR is merged or the branch is intentionally abandoned.
 2. Run the [documentation preservation gate](#documentation-preservation-gate-mandatory--p0).
-3. Run `npm run worktree:pre-delete`.
+3. Confirm zero uncommitted or untracked paths remain (`git -C <path> status --porcelain`).
 4. Remove the worktree with `git worktree remove <path>` (no `--force` unless backup + gate complete).
-5. Run `git worktree prune` · `git branch -d ipi/<task>-<slug>` after merge · `npm run worktree:audit` (target ≤ ~3–4 active trees).
+5. Run `git worktree prune` · `git branch -d ipi/<task>-<slug>` after merge · `git worktree list` (target ≤ ~3–4 active trees).
 
 Do not keep unused worktrees. They waste disk space, create stale branches, and cause agents to work from old code.
 
@@ -198,9 +191,9 @@ done
 Before adding a new worktree, audit existing ones — this repo has drifted past the ~3–4 cap (13+ seen in Jul 2026 audit):
 
 ```bash
-npm run worktree:audit              # markdown inventory + health score
-npm run worktree:audit -- --write    # refresh docs/development/worktree-tracker.md
-git worktree list | wc -l
+git worktree list                   # every registered tree + its branch
+git worktree list | wc -l           # count against the ~3–4 cap
+git worktree prune                  # drop metadata for trees already deleted
 ```
 
 If it's high, run the [weekly tidy ritual](references/ipix-ops.md#weekly-tidy-ritual) first (prune stale metadata, delete branches already merged into `origin/main`) rather than adding another on top of the pile. A worktree for a task that's already merged or abandoned is pure confusion risk for the next session that runs `git worktree list`.
@@ -293,17 +286,17 @@ A fresh worktree has the code but none of the *environment*. Initialize it:
   git worktree prune                # clear stale metadata after a manual delete
   ```
 - **Backup first** if the worktree is dirty — see [Backup before cleanup](#backup-before-cleanup). Never `--force` without it.
-- **Pre-delete gate** — `npm run worktree:pre-delete` (blocks if the branch has commits `origin/<branch>` doesn't have; see [Backup before cleanup](#backup-before-cleanup)).
+- **Pre-delete gate** — `git -C <path> status --porcelain` must be empty, and `git log --oneline origin/<branch>..HEAD` must show only commits you intend to drop (see [Backup before cleanup](#backup-before-cleanup)).
 - **Weekly tidy ritual** (prune stale branches + merged worktrees) → [references/ipix-ops.md#weekly-tidy-ritual](references/ipix-ops.md#weekly-tidy-ritual).
 
 ## Quick reference
 
 | Task | Command |
 |------|---------|
-| **iPix: add worktree (preferred)** | `npm run worktree:add -- IPI-286 route-aware-sections` |
-| **iPix: audit inventory** | `npm run worktree:audit` · `-- --write` updates tracker |
-| **iPix: start-work gate** | `npm run worktree:health` (current worktree) · `-- --all` (every worktree) |
-| **iPix: pre-delete gate** | `npm run worktree:pre-delete` — run before removing a worktree you didn't just push |
+| **Add a worktree** | `git worktree add ../wt-ipi-286-route-aware-sections -b ipi/286-route-aware-sections origin/main` |
+| **Audit inventory** | `git worktree list` · `git worktree prune` |
+| **Health check** | in the worktree: `git status --porcelain` · `git log --oneline -1` vs `origin/main` |
+| **Pre-delete gate** | `git -C <path> status --porcelain` empty + no unpushed commits you did not mean to drop |
 | **iPix: doc preservation + remove** | [Documentation preservation gate](#documentation-preservation-gate-mandatory--p0) → `git worktree remove` |
 | Native isolated session | `claude --worktree <name>` |
 | Native, from a PR | `claude --worktree "#<n>"` |
