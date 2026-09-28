@@ -44,6 +44,7 @@ export function isPlannerRunControlMessage(value: unknown): value is PlannerRunC
 export type PlannerRunControlLogger = (message: string, details?: Record<string, unknown>) => void;
 
 const DEFAULT_TIMEOUT_MS = 1_500;
+const RETRY_FRACTIONS = [0.05, 0.15, 0.3, 0.3] as const;
 export const plannerRuntimeInstanceId = randomUUID();
 export interface PlannerRunOwnerHandle {
   publish(event: BaseEvent): Promise<void>;
@@ -61,12 +62,14 @@ type ProbeAck = Extract<PlannerRunControlMessage, { kind: "probe_ack" }>;
 type ConnectAck = Extract<PlannerRunControlMessage, { kind: "connect_ack" }>;
 type StopAck = Extract<PlannerRunControlMessage, { kind: "stop_ack" }>;
 
-
-function settleAfter<T>(timeoutMs: number, fallback: T): {
+type Settler<T> = {
   promise: Promise<T>;
   settle: (value: T) => void;
   cancel: () => void;
-} {
+  isSettled: () => boolean;
+};
+
+function settleAfter<T>(timeoutMs: number, fallback: T): Settler<T> {
   let settled = false;
   let resolvePromise!: (value: T) => void;
   const promise = new Promise<T>((resolve) => (resolvePromise = resolve));
@@ -88,9 +91,35 @@ function settleAfter<T>(timeoutMs: number, fallback: T): {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      resolvePromise(fallback);
     },
+    isSettled: () => settled,
   };
 }
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref?.();
+  });
+}
+
+async function sendUntilSettled<T>(
+  bus: PlannerRunControlBus,
+  message: PlannerRunControlMessage,
+  waiter: Settler<T>,
+  timeoutMs: number,
+): Promise<void> {
+  await bus.send(message);
+  for (const fraction of RETRY_FRACTIONS) {
+    if (waiter.isSettled()) return;
+    const waitMs = Math.max(10, Math.floor(timeoutMs * fraction));
+    await Promise.race([waiter.promise.then(() => undefined), delay(waitMs)]);
+    if (waiter.isSettled()) return;
+    await bus.send(message);
+  }
+}
+
 export class PlannerRunControl {
   constructor(
     private readonly openBus: OpenPlannerRunControlBus,
@@ -119,6 +148,7 @@ export class PlannerRunControl {
     stopLocal: (runId: string) => Promise<boolean>,
   ): Promise<PlannerRunOwnerHandle> {
     const bus = await this.openBus(threadId);
+    const stopRequests = new Map<string, Promise<StopAck>>();
     let remoteListener = false;
     let closed = false;
     const off = bus.onMessage((message) => {
@@ -148,14 +178,19 @@ export class PlannerRunControl {
           // of the requested run may acknowledge the Stop; otherwise a newer
           // run could race the real owner and incorrectly return stopped:false.
           if (message.runId !== runId) return;
-          const stopped = await stopLocal(message.runId);
-          await bus.send({
-            kind: "stop_ack",
-            requestId: message.requestId,
-            runId: message.runId,
-            stopped,
-            ownerInstanceId: this.instanceId,
-          });
+          let response = stopRequests.get(message.requestId);
+          if (!response) {
+            response = stopLocal(message.runId).then((stopped) => ({
+              kind: "stop_ack" as const,
+              requestId: message.requestId,
+              runId: message.runId,
+              stopped,
+              ownerInstanceId: this.instanceId,
+            }));
+            stopRequests.set(message.requestId, response);
+          }
+          const ack = await response;
+          if (!closed) await bus.send(ack);
         }
       };
       void respond().catch((error) => {
@@ -175,11 +210,13 @@ export class PlannerRunControl {
       close: async () => {
         if (closed) return;
         closed = true;
+        stopRequests.clear();
         off();
         await bus.close();
       },
     };
   }
+
   private async request<T extends ProbeAck | StopAck>(
     threadId: string,
     message: Extract<PlannerRunControlMessage, { kind: "probe" | "stop" }>,
@@ -191,7 +228,7 @@ export class PlannerRunControl {
       if (matches(incoming)) waiter.settle(incoming);
     });
     try {
-      await bus.send(message);
+      await sendUntilSettled(bus, message, waiter, this.timeoutMs);
       return await waiter.promise;
     } finally {
       waiter.cancel();
@@ -209,14 +246,12 @@ export class PlannerRunControl {
         message.kind === "probe_ack" && message.requestId === requestId,
     );
   }
+
   async isRunning(threadId: string): Promise<boolean> {
     return (await this.probe(threadId)) !== null;
   }
 
-  async stop(
-    threadId: string,
-    runId: string,
-  ): Promise<StopAck | null> {
+  async stop(threadId: string, runId: string): Promise<StopAck | null> {
     const requestId = randomUUID();
     return this.request(
       threadId,
@@ -254,7 +289,7 @@ export class PlannerRunControl {
     });
 
     try {
-      await bus.send({ kind: "connect", requestId });
+      await sendUntilSettled(bus, { kind: "connect", requestId }, waiter, this.timeoutMs);
       const ack = await waiter.promise;
       if (!ack) {
         off();
@@ -266,6 +301,7 @@ export class PlannerRunControl {
         closed = value;
       });
     } catch (error) {
+      waiter.cancel();
       off();
       await bus.close();
       throw error;
