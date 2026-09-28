@@ -15,6 +15,18 @@ on:
 permissions:
   contents: read
 
+# The certified Planner spec list — the single source of truth for what this
+# workflow runs. The "Assert the running workflow matches the candidate SHA"
+# step reads this exact list from BOTH the running copy and the candidate SHA's
+# copy and fails if they differ, so a stale dispatch ref can no longer certify a
+# PR's code against a different (usually older) spec list.
+env:
+  CERT_SPECS: |
+    e2e/planner-stop-journey.spec.ts
+    e2e/planner-journey.spec.ts
+    e2e/planner-thread-isolation.spec.ts
+    e2e/planner-workflows.spec.ts
+
 concurrency:
   group: vercel-preview-${{ inputs.sha }}
   cancel-in-progress: false
@@ -51,6 +63,95 @@ jobs:
           git check-ref-format --branch "$BRANCH" >/dev/null
           git fetch --no-tags origin "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
           git merge-base --is-ancestor "$SHA" "origin/$BRANCH"
+
+      # IPI-1332 · CERT-INTEGRITY-001 — a workflow_dispatch runs the workflow
+      # file from the dispatch REF (a branch or tag), never from the candidate
+      # SHA, and `ref` cannot be a SHA (https://github.com/github/docs/issues/590).
+      # Dispatching `--ref main` while certifying a PR-branch SHA therefore ran
+      # MAIN's spec list: on 2026-09-27 that certified PR B with 3 specs while PR
+      # B intended 4, so `planner-workflows.spec.ts` was reported green having
+      # never executed. Prove the two lists agree instead of assuming they do,
+      # and make the candidate SHA's list the single source of truth for the run.
+      - name: Assert the running workflow matches the candidate SHA
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.sha }}
+          RUNNING_REF_SHA: ${{ github.sha }}
+          RUNNING_REF: ${{ github.ref }}
+          WORKFLOW_PATH: .github/workflows/vercel-preview.yml
+        run: |
+          set -euo pipefail
+
+          # Spec paths may contain uppercase, underscores and sub-directories
+          # (`e2e/agents/seed.spec.ts` already exists), so the pattern must accept
+          # any non-whitespace path character. A narrower class silently DROPS a
+          # spec from both sides of the comparison *and* from the run below, which
+          # is the silent-narrowing failure this workflow exists to prevent.
+          spec_path_pattern='e2e/[A-Za-z0-9_./-]+\.spec\.ts'
+
+          # Read the declared list from the `CERT_SPECS:` block ONLY. Grepping
+          # the whole file would also match a spec path that appears in a
+          # comment, so a merely-documented spec could be treated as declared and
+          # the comparison below could pass while that spec never runs.
+          cert_specs_block_of() {
+            sed -n '/^[[:space:]]*CERT_SPECS:[[:space:]]*|/,/^[^[:space:]]/p' "$1"
+          }
+
+          cert_specs_of() {
+            cert_specs_block_of "$1" | grep -oE "$spec_path_pattern" | sort -u
+          }
+
+          # Independent of the pattern above: any declared line naming a spec that
+          # the pattern cannot extract would be dropped from BOTH sides, so the
+          # comparison would pass while that spec never runs. Fail loudly instead.
+          assert_every_declared_spec_is_extractable() {
+            local stray
+            stray="$(cert_specs_block_of "$1" | grep -E '\.spec\.ts' | grep -vE "$spec_path_pattern" || true)"
+            if [ -n "$stray" ]; then
+              echo "::error::$1 declares a spec path this workflow cannot extract (spec_path_pattern=${spec_path_pattern}): ${stray}" >&2
+              exit 1
+            fi
+          }
+
+          # The workspace copy is the CANDIDATE SHA's (actions/checkout used
+          # `ref: inputs.sha`): this is the list the candidate intends to run.
+          assert_every_declared_spec_is_extractable "$WORKFLOW_PATH"
+          mapfile -t candidate < <(cert_specs_of "$WORKFLOW_PATH")
+
+          # The RUNNING file is the one GitHub compiled into this job, i.e. the
+          # dispatch ref's copy. Fetch that ref so the dispatched commit's
+          # objects are present, then read the exact commit GitHub dispatched on.
+          git fetch --no-tags origin "$RUNNING_REF"
+          git show "$RUNNING_REF_SHA:$WORKFLOW_PATH" > /tmp/running-workflow.yml
+          assert_every_declared_spec_is_extractable /tmp/running-workflow.yml
+          mapfile -t running < <(cert_specs_of /tmp/running-workflow.yml)
+
+          echo "Certified spec list — running workflow (${RUNNING_REF} @ ${RUNNING_REF_SHA}):"
+          printf '  %s\n' "${running[@]}"
+          echo "Certified spec list — candidate SHA   (${CANDIDATE_SHA}):"
+          printf '  %s\n' "${candidate[@]}"
+
+          if [ "${#candidate[@]}" -eq 0 ]; then
+            echo "::error::${CANDIDATE_SHA} declares no certified specs in the ${WORKFLOW_PATH} CERT_SPECS block. Certify a commit that carries this declaration (any commit at or after the one that introduced CERT_SPECS)." >&2
+            exit 1
+          fi
+          for spec in "${candidate[@]}"; do
+            if [ ! -f "$spec" ]; then
+              echo "::error::${spec} is declared by ${CANDIDATE_SHA} but missing from that commit" >&2
+              exit 1
+            fi
+          done
+
+          if [ "${#running[@]}" -eq 0 ]; then
+            echo "::error::the workflow that ran (${RUNNING_REF} @ ${RUNNING_REF_SHA}) has no CERT_SPECS block, so its certified list cannot be verified. Re-dispatch with --ref on a branch or tag that carries the same declaration as ${CANDIDATE_SHA}." >&2
+            exit 1
+          fi
+
+          if [ "${running[*]}" != "${candidate[*]}" ]; then
+            echo "::error title=Certifying a different spec list than the candidate declares::the workflow that ran came from ${RUNNING_REF} (${RUNNING_REF_SHA}), but ${CANDIDATE_SHA} declares a different spec list. Re-dispatch with --ref set to a branch or tag containing ${CANDIDATE_SHA}." >&2
+            exit 1
+          fi
+          echo "OK: ${#candidate[@]} spec file(s) — running workflow equals the candidate SHA's declared list."
 
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@59.23.1
@@ -132,9 +233,40 @@ jobs:
           # Named specs only: brand-intelligence-journey is deliberately not
           # included because it writes to a hosted brand and must never run
           # against a Preview by accident.
+          # `CERT_SPECS` is the workflow-level declared list; the step above has
+          # already proved it equals the candidate SHA's own copy of that list.
+          #
+          # Extract only the spec paths rather than reading every line. A YAML
+          # block scalar already ends with a newline and the here-string adds
+          # another, so a plain `mapfile -t specs <<< "$CERT_SPECS"` appends an
+          # empty element — `${#specs[@]}` would be 5 for 4 declared specs and this
+          # step would fail on every run. Verified against the real value.
+          #
+          # The pattern must match every path the CU block allows (uppercase,
+          # underscores, sub-directories), or a declared spec would be dropped
+          # here and never run; the assertion step fails loudly in that case.
+          spec_path_pattern='e2e/[A-Za-z0-9_./-]+\.spec\.ts'
+          mapfile -t specs < <(grep -oE "$spec_path_pattern" <<< "${CERT_SPECS:-}")
+          if [ "${#specs[@]}" -eq 0 ]; then
+            echo "::error::CERT_SPECS declares no specs; refusing to run an unbounded spec set" >&2
+            exit 1
+          fi
+          # Independent of the pattern: any declared line naming a spec that was
+          # not extracted would be silently skipped, so fail loudly instead.
+          stray="$(grep -E '\.spec\.ts' <<< "${CERT_SPECS:-}" | grep -vE "$spec_path_pattern" || true)"
+          if [ -n "$stray" ]; then
+            echo "::error::CERT_SPECS declares a spec path this step cannot extract (spec_path_pattern=${spec_path_pattern}): ${stray}" >&2
+            exit 1
+          fi
+          # Still guard against a first-line-only reader: the declared line count
+          # must equal the number of specs handed to Playwright.
+          declared="$(grep -cE "$spec_path_pattern" <<< "${CERT_SPECS:-}" || true)"
+          if [ "${#specs[@]}" -ne "$declared" ]; then
+            echo "::error::expanded ${#specs[@]} spec(s) but ${declared} declared line(s); refusing to run a partial certification" >&2
+            exit 1
+          fi
+          echo "Running ${#specs[@]} certified spec file(s):"
+          printf '  %s\n' "${specs[@]}"
           PLAYWRIGHT_BROWSERS_PATH=0 npx playwright test \
             --project=chromium-ai-smoke \
-            e2e/planner-stop-journey.spec.ts \
-            e2e/planner-journey.spec.ts \
-            e2e/planner-thread-isolation.spec.ts \
-            e2e/planner-workflows.spec.ts
+            "${specs[@]}"

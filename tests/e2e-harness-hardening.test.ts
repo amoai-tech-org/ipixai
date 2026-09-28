@@ -19,6 +19,7 @@ import { E2E_WEBSERVER_MARKER, plannerSeedRoutesEnabled } from "../src/lib/plann
 
 
 type WorkflowStep = {
+  name?: string;
   run?: string;
   uses?: string;
   env?: Record<string, unknown>;
@@ -138,6 +139,7 @@ describe("Playwright E2E harness hardening", () => {
       path.resolve(process.cwd(), ".github/workflows/vercel-preview.yml"),
       "utf8",
     );
+    const workflow = (parse(source) ?? {}) as { env?: Record<string, string> };
     const job = workflowJob(source, "deploy");
     const journey = (job.steps ?? []).find((step) =>
       step.run?.includes("npx playwright test"),
@@ -149,12 +151,214 @@ describe("Playwright E2E harness hardening", () => {
     expect(journey?.env?.VERCEL_AUTOMATION_BYPASS_SECRET).toContain(
       "secrets.VERCEL_AUTOMATION_BYPASS_SECRET",
     );
-    expect(journey?.run).toContain("e2e/planner-stop-journey.spec.ts");
-    expect(journey?.run).toContain("e2e/planner-journey.spec.ts");
+
+    // IPI-1332 · CERT-INTEGRITY-001 — the certified spec list is declared once
+    // at workflow level and the run step consumes it, so assert the EFFECTIVE
+    // list rather than one step's literal text: a check on the literal text can
+    // pass while the workflow actually runs something else. Assert the COMPLETE
+    // list, not a subset — a subset still passes if the list loses the very spec
+    // whose omission caused the false-green this guard exists to prevent.
+    const certified = String(workflow.env?.CERT_SPECS ?? "");
+    expect(
+      certified
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+      "CERT_SPECS must declare exactly the certified Planner journeys",
+    ).toEqual([
+      "e2e/planner-stop-journey.spec.ts",
+      "e2e/planner-journey.spec.ts",
+      "e2e/planner-thread-isolation.spec.ts",
+      "e2e/planner-workflows.spec.ts",
+    ]);
+    // The run step must consume the declared list rather than keep its own copy.
+    expect(journey?.run).toContain("$CERT_SPECS");
+
     // It must not silently widen to the writing brand-intelligence journey.
     // Assert on the spec path, not the bare name, so the workflow's own
     // explanatory comment cannot satisfy or break this check.
+    expect(certified).not.toContain("brand-intelligence-journey.spec.ts");
     expect(journey?.run).not.toContain("brand-intelligence-journey.spec.ts");
+  });
+
+  // IPI-1332 · CERT-INTEGRITY-001 regression — the run step expands
+  // `CERT_SPECS` into a bash array. `read -r -a` reads only the FIRST line, so a
+  // multi-line declaration silently shrank to a single spec — narrowing the
+  // certified set in exactly the way this workflow exists to prevent. Execute
+  // the workflow's own expansion line against its own declared list, so a
+  // regression to a first-line-only reader fails here.
+  it("expands every declared certified spec when the Preview workflow runs", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), ".github/workflows/vercel-preview.yml"),
+      "utf8",
+    );
+    const workflow = (parse(source) ?? {}) as { env?: Record<string, string> };
+    const rawDeclaration = String(workflow.env?.CERT_SPECS ?? "");
+    const declared = rawDeclaration
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    expect(declared.length, "a multi-line declaration is the case this guards").toBeGreaterThan(1);
+
+    const job = workflowJob(source, "deploy");
+    const journey = (job.steps ?? []).find((step) =>
+      step.run?.includes("npx playwright test"),
+    );
+    const runLines = (journey?.run ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "" && !line.startsWith("#"));
+
+    const patternLine = runLines.find((line) => line.startsWith("spec_path_pattern="));
+    const expander = runLines.find(
+      (line) => /^(mapfile|read)\b/.test(line) && line.includes("specs"),
+    );
+    const declarer = runLines.find((line) => line.startsWith("declared="));
+    expect(patternLine, "the journey step must define the spec path pattern").toBeDefined();
+    expect(expander, "the journey step must expand CERT_SPECS into an array").toBeDefined();
+    expect(declarer, "the journey step must derive the declared line count").toBeDefined();
+
+    // GitHub supplies a YAML block scalar's value WITH its trailing newline, and
+    // the here-string adds another. Simulating the value without that newline is
+    // how an earlier version of this test passed while the workflow appended an
+    // empty array element and failed its own count check on every run.
+    const expansion = spawnSync(
+      "bash",
+      [
+        "-c",
+        [
+          patternLine,
+          expander,
+          declarer,
+          `printf '%s\\n' "\${specs[@]}"`,
+          `echo "declared=\${declared}"`,
+        ].join("\n"),
+      ],
+      {
+        encoding: "utf8",
+        env: { ...process.env, CERT_SPECS: `${rawDeclaration}` },
+      },
+    );
+    expect(expansion.status, expansion.stderr).toBe(0);
+
+    const [specOutput, ...declaredLines] = expansion.stdout.split("declared=");
+    // Drop only printf's own trailing newline, so an accidental empty array
+    // element stays visible instead of being filtered away.
+    const passed = specOutput.split("\n").slice(0, -1);
+    expect(passed, "the run step must pass every declared spec to Playwright").toEqual(declared);
+    expect(passed, "no array element may be empty").not.toContain("");
+    expect(
+      String(declaredLines.join("")).trim(),
+      "the count check compares the array length against the declared line count",
+    ).toBe(String(declared.length));
+  });
+
+  // IPI-1332 · CERT-INTEGRITY-001 regression — the spec path pattern drives BOTH
+  // the candidate/running comparison AND the Playwright invocation, so a path it
+  // cannot match is dropped from both sides: the guard passes while that spec
+  // never runs. `e2e/agents/seed.spec.ts` (a real file) is exactly such a path,
+  // because a narrower class excludes the sub-directory slash.
+  it("extracts every real e2e spec path, including sub-directories", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), ".github/workflows/vercel-preview.yml"),
+      "utf8",
+    );
+    const job = workflowJob(source, "deploy");
+    const assertion = (job.steps ?? []).find((step) =>
+      step.name?.startsWith("Assert the running workflow"),
+    );
+    const run = assertion?.run ?? "";
+
+    const declaredPattern = run
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.startsWith("spec_path_pattern="))
+      ?.replace(/^spec_path_pattern=/, "")
+      .replace(/^['"]|['"]$/g, "");
+    expect(declaredPattern, "the assertion step must define the spec path pattern").toBeDefined();
+
+    // Every spec file actually present must be matched by that pattern.
+    const specFiles = readdirSync(path.resolve(process.cwd(), "e2e"), {
+      recursive: true,
+      encoding: "utf8",
+    })
+      .map((entry) => `e2e/${entry}`)
+      .filter((entry) => entry.endsWith(".spec.ts"));
+    expect(specFiles.length).toBeGreaterThan(0);
+
+    // Exercise the workflow's real extraction (`grep -oE`) instead of
+    // reimplementing the match in JS. That is both a stronger test — it proves the
+    // shipped mechanism, not a JS lookalike — and it avoids a non-literal
+    // `new RegExp`, which is a legitimate security-linter finding. The pattern is
+    // passed through the environment, never interpolated into the command.
+    const extraction = spawnSync(
+      "bash",
+      ["-c", 'grep -oE "$SPEC_PATH_PATTERN" <<< "$SPEC_LIST" | sort -u'],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          SPEC_PATH_PATTERN: declaredPattern,
+          SPEC_LIST: specFiles.join("\n"),
+        },
+      },
+    );
+    expect(extraction.status, extraction.stderr).toBe(0);
+    const extracted = extraction.stdout.split("\n").filter(Boolean);
+    expect(
+      extracted,
+      "the spec path pattern must extract every real spec path, including sub-directories and mixed case",
+    ).toEqual([...specFiles].sort());
+
+    // The same pattern must appear in the run step, or the two could drift.
+    const journey = (job.steps ?? []).find((step) =>
+      step.run?.includes("npx playwright test"),
+    );
+    expect(journey?.run).toContain("spec_path_pattern");
+  });
+
+  it("tells the operator a dispatch ref may be a branch or a tag", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), ".github/workflows/vercel-preview.yml"),
+      "utf8",
+    );
+    const job = workflowJob(source, "deploy");
+    const assertion = (job.steps ?? []).find((step) =>
+      step.name?.startsWith("Assert the running workflow"),
+    );
+
+    expect(assertion?.run).toContain("branch or tag");
+    expect(assertion?.run, "a workflow_dispatch ref is not always a branch").not.toMatch(
+      /--ref (?:set to )?the branch\b/,
+    );
+  });
+
+  // IPI-1332 · CERT-INTEGRITY-001 regression — a workflow_dispatch runs the
+  // workflow file from the dispatch REF, not from the candidate SHA, so
+  // certifying a PR-branch SHA while dispatching `--ref main` silently ran
+  // main's spec list. On 2026-09-27 that recorded `planner-workflows.spec.ts`
+  // as Preview-verified without it ever executing. This locks the guard in.
+  it("proves the exact-SHA Preview cert runs the candidate SHA's workflow, not the dispatch ref's", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), ".github/workflows/vercel-preview.yml"),
+      "utf8",
+    );
+    const job = workflowJob(source, "deploy");
+    const guard = (job.steps ?? []).find((step) =>
+      step.name?.includes("Assert the running workflow matches the candidate SHA"),
+    );
+    expect(
+      guard,
+      "the Preview cert must assert it is running the candidate SHA's workflow",
+    ).toBeDefined();
+    // It must compare the candidate SHA's declared list against the RUNNING
+    // file's, which comes from the dispatch ref.
+    expect(guard?.env?.CANDIDATE_SHA).toContain("inputs.sha");
+    expect(guard?.env?.RUNNING_REF_SHA).toContain("github.sha");
+    expect(guard?.run).toContain("CANDIDATE_SHA");
+    expect(guard?.run).toContain("RUNNING_REF_SHA");
+    // …and fail closed rather than warn and continue with the wrong list.
+    expect(guard?.run).toContain("exit 1");
   });
 
   it("reports a clear Supabase Auth timeout instead of a raw Playwright TimeoutError", async () => {
