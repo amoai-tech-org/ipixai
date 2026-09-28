@@ -109,10 +109,21 @@ jobs:
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # Identify the project by ID, not by its display name. A hardcoded
+          # `vercel ls ipixai` depends on the project name (and its casing) never
+          # changing or gaining an org prefix, and `ci.yml`'s release job already
+          # identifies this project by VERCEL_PROJECT_ID / VERCEL_ORG_ID. Verified
+          # that `vercel ls <projectId>` resolves the same production deployments.
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           EXPECTED_SHA: ${{ steps.request.outputs.expected_sha }}
         run: |
           set -euo pipefail
-          vercel ls ipixai --prod --json --token="$VERCEL_TOKEN" > /tmp/prod.json
+          if [ -z "${VERCEL_PROJECT_ID:-}" ]; then
+            echo "::error::VERCEL_PROJECT_ID is not configured for this repository" >&2
+            exit 1
+          fi
+          vercel ls "$VERCEL_PROJECT_ID" --prod --json --token="$VERCEL_TOKEN" > /tmp/prod.json
           vercel inspect https://www.ipix.co --json --token="$VERCEL_TOKEN" > /tmp/alias.json
 
           node -e '
@@ -121,7 +132,11 @@ jobs:
             const list = JSON.parse(fs.readFileSync("/tmp/prod.json", "utf8"));
             const alias = JSON.parse(fs.readFileSync("/tmp/alias.json", "utf8"));
             const deployments = (list.deployments || list).filter((d) => d.target === "production");
-            if (deployments.length === 0) throw new Error("no production deployment found");
+            if (deployments.length === 0) {
+              throw new Error(
+                `no production deployment found for project ${process.env.VERCEL_PROJECT_ID}`,
+              );
+            }
             const newest = deployments[0];
             const sha = (newest.meta || {}).githubCommitSha;
             if (sha !== expected) {
