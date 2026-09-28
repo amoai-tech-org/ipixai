@@ -19,6 +19,7 @@ let researchEvidence: string;
 let externalReferenceMapping: string;
 let mergeConflicts: string;
 let postMerge: string;
+let preMergeTests: string;
 
 describe("iPix engineering skill contracts", () => {
   beforeAll(() => {
@@ -35,6 +36,7 @@ describe("iPix engineering skill contracts", () => {
     externalReferenceMapping = readRepoFile(".claude/skills/tasks/references/external-reference-mapping.md");
     mergeConflicts = readRepoFile(".claude/skills/resolving-merge-conflicts/SKILL.md");
     postMerge = readRepoFile(".claude/skills/tasks/references/post-merge.md");
+    preMergeTests = readRepoFile(".claude/skills/tasks/references/pre-merge-tests.md");
   });
 
   test("refactor-plan continues when implementation was already requested", () => {
@@ -158,6 +160,33 @@ describe("iPix engineering skill contracts", () => {
     expect(syncSection).toContain("Do not automatically rebase active feature branches");
     expect(tasks).toContain("Post-merge local-main synchronization");
     expect(agents).toContain("synchronize local \`main\` with \`origin/main\`");
+  });
+
+  test("durable records are updated in the same PR, and stale ones are corrected with the change", () => {
+    // Structural anchors: the Done gate must keep all three durable-record
+    // decisions and the changelog bullet must stay explicit that the entry ships
+    // with the change rather than as a follow-up.
+    expect(tasks).toContain("docs/**` in the same PR");
+    expect(tasks).toContain("update `changelog.md` **in the same PR**");
+    expect(tasks).toContain("The post-merge pass is the fallback for a genuine miss, never the plan");
+    expect(tasks).toContain("Stale records are corrected in the same PR as the change that made them stale");
+    expect(tasks).toContain("neither applies → record the reason briefly in the task/PR");
+  });
+
+  test("review suggestions are verified against the thing they cite before being applied", () => {
+    expect(tasks).toContain("open it and confirm it says what the suggestion claims");
+    expect(tasks).toContain("classify each review thread as `VALID`, `PARTIAL`, or `NOISE`");
+  });
+
+  test("pre-merge guidance requires running contract tests after editing a file they read", () => {
+    const sectionStart = preMergeTests.indexOf("## Documentation files are under test");
+    expect(sectionStart, "the section must exist as its own heading").toBeGreaterThanOrEqual(0);
+
+    const section = preMergeTests.slice(sectionStart, preMergeTests.indexOf("## iPix path/risk matrix"));
+    expect(section).toMatch(/run the contract test \*\*after\*\* the edit/);
+    expect(section).toContain("npm run test:skills");
+    expect(section).toMatch(/pin the \*\*structure\*\*/);
+    expect(section).toMatch(/rather than transient wording/);
   });
 
   test("todo stays a short Linear handoff while changelog stays curated shipped history", () => {

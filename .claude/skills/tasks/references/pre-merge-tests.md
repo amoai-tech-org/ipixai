@@ -27,6 +27,14 @@ Official guidance supports this split: Next.js recommends unit/component tests f
 - [ ] No required GitHub check is missing, stale, or green only on an older SHA.
 - [ ] All actionable review threads are resolved with evidence.
 
+## Documentation files are under test
+
+`todo.md`, `changelog.md`, `AGENTS.md` and the skill files are read by `tests/skill-contracts.test.ts`. Editing any file a contract test reads means editing its test surface:
+
+- run the contract test **after** the edit (`npm run test:skills`). Never assume prose that "looks right" still satisfies it — a rewrite can break a pinned structural contract while reading perfectly;
+- when adding an assertion, pin the **structure** the document must keep (required headings, required labelled fields, required links) rather than transient wording. Content assertions freeze one moment's prose: they make the next honest update fail, and the usual repair is to delete the assertion, which removes the protection entirely;
+- if a document is not yet covered by a contract test, covering it belongs to the change that starts relying on it.
+
 ## iPix path/risk matrix
 
 | Change / risk | Cheapest required proof | Escalate when |

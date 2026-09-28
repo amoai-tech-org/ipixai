@@ -7,7 +7,7 @@ description: >
   review-comment troubleshooting, and post-merge proof. Defines the task standard; it does not
   replace task-verifier Done checks.
 metadata:
-  version: "1.14.0"
+  version: "1.15.0"
 ---
 
 # tasks — iPix Linear task specification standard
@@ -89,7 +89,7 @@ Linear remains the authoritative per-task execution record. Keep a concise hando
 Opening a PR starts the review loop; it does not finish the task. After the PR opens or after any new push:
 
 1. Refresh the PR's exact head/base, current `main`, unresolved review threads, submitted reviews, required checks, and mergeability.
-2. Treat reviewer suggestions as hypotheses: classify each review thread as `VALID`, `PARTIAL`, or `NOISE` using current code, installed versions/types, runtime evidence, and current official sources.
+2. Treat reviewer suggestions as hypotheses: classify each review thread as `VALID`, `PARTIAL`, or `NOISE` using current code, installed versions/types, runtime evidence, and current official sources. If a suggested fix names another file, section, rule or API, **open it and confirm it says what the suggestion claims** before citing it — a cross-reference to an unrelated rule reads as coverage while providing none, which is worse than no reference at all.
 3. For every `VALID`/actionable part, reproduce the problem or add the smallest failing regression/contract first when practical, identify root cause, then implement the smallest safe fix. Do not bundle unrelated cleanup.
 4. Re-run the structural maintainability review on touched/load-bearing files and classify candidates as `KEEP / REFACTOR NOW / FOLLOW-UP`; move worthwhile out-of-scope work to a linked Linear issue instead of expanding the PR.
 5. Run the cheapest decisive targeted proof, then the risk-matched broader suite. Re-check current `main` and required exact-head checks after every push.
@@ -105,9 +105,11 @@ After a PR merges, complete the applicable post-merge proof in [post-merge.md](r
 
 At the Done gate, explicitly decide whether the change requires durable docs and/or a changelog entry:
 
-- behavior, architecture, contracts, runbooks, or user journeys changed → update the canonical `docs/**` in the same PR; GitBook publishes after merge;
-- notable shipped product, security, reliability, or operational change → update `changelog.md`;
+- behavior, architecture, contracts, runbooks, governance/policy, or user journeys changed → update the canonical `docs/**` in the same PR; GitBook publishes after merge;
+- notable shipped product, security, reliability, operational or governance/policy change → update `changelog.md` **in the same PR**. The entry is part of the change, not a follow-up: merging a contract change without it leaves `main` describing a state that never existed. The post-merge pass is the fallback for a genuine miss, never the plan;
 - neither applies → record the reason briefly in the task/PR.
+
+Stale records are corrected in the same PR as the change that made them stale. If the change causes `todo.md`, a tracker, a runbook or another durable document to describe a state that no longer exists, correct it there rather than leaving a contradictory record behind — a merge that strands a stale record has not finished the job.
 
 ## Mandatory task structure
 
