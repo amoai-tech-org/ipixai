@@ -1,8 +1,16 @@
 # AGENTS.md
 
-Canonical repository instructions for coding agents working on [amoai-tech/ipixai](https://github.com/amoai-tech/ipixai) (default branch `main`). Format: [AGENTS.md](https://agents.md/). Human setup belongs in `README.md` and `CONTRIBUTING.md`. This root file is the repository-wide agent contract; user instructions override it. If nested `AGENTS.md` files are added later, the closest file wins for its subtree.
+Canonical repository instructions for coding agents working on [amoai-tech/ipixai](https://github.com/amoai-tech/ipixai) (default branch `main`). Format: [AGENTS.md](https://agents.md/). Human setup belongs in `README.md` and `CONTRIBUTING.md`.
 
-This is the iPix CopilotKit + Mastra runtime (`/home/sk/ipixai`). Do not implement from `/home/sk/ipix` or the old repository name `amo-tech-ai/ipix`.
+**Precedence, highest first:**
+
+1. an explicit instruction from the user in chat — it overrides everything below;
+2. the closest `AGENTS.md` to the file being edited. Nested files exist today: `.claude/skills/vercel-react-best-practices/AGENTS.md` governs that skill's subtree, not this root file;
+3. **this root file** — the repository-wide agent contract;
+4. `.claude/CLAUDE.md` — a Claude-only overlay. It may add Claude-specific detail; it must not restate or override repository-wide rules;
+5. domain `SKILL.md` files, project markdown, then Linear prose — until independently verified against the tiers in [Source of truth](#source-of-truth--higher-wins).
+
+This repository is the iPix CopilotKit + Mastra runtime. Implement here, in `amoai-tech/ipixai`. Do not implement from a different checkout, or from the old repository name `amo-tech-ai/ipix`.
 
 ## Canonical engineering workflow
 
@@ -104,7 +112,7 @@ Combined `npm run dev` is blocked by **DEV-STAB-001** because of the watcher/for
 
 Do not run `npm run build` while `:3000` or `:4111` is listening (`scripts/dev-guard.mjs`). Restart a dev server after adding dependencies.
 
-Graphify before spanning-file search. Build the local graph once when absent, update it after source changes, then query it:
+Graphify before spanning-file search. `graphify` is a **user-local binary**, not a repository dependency: it lives at `$HOME/.local/bin/graphify` and is invoked with that directory on `PATH`. Treat it as optional infrastructure — if the binary is absent, fall back to targeted `grep`/`glob` reading of the load-bearing paths and record `Graphify: N/A — binary unavailable` rather than stalling. If the binary is present but `graphify-out/graph.json` is absent, build the graph once; **this repository does not ship a prebuilt graph**, so never assume one exists. Then update it after source changes and query it:
 
 ```bash
 PATH="$HOME/.local/bin:$PATH" graphify .
@@ -156,6 +164,8 @@ static inspection
 → live/runtime proof when required
 ```
 
+**`npm test` and `npx vitest run` are not the same check.** `npm test` runs `vitest run`, but npm first executes `pretest`, which is `npm run secrets:check` (`scripts/check-local-secrets.mjs`). `npx vitest run` bypasses that gate entirely. Use `npm test` when you mean "the repository's test gate"; when you use `npx vitest run <path>` for a targeted proof, say so and run `npm run secrets:check` separately at least once before finishing.
+
 Important proof classes are independent. One cannot substitute for another: authorization, persistence, restart, idempotency/concurrency, model routing, HITL exact-artifact proof, downstream abort, real user journey, and post-merge runtime proof each require their own evidence when in scope.
 
 Before finishing a substantial change:
@@ -186,6 +196,22 @@ For tasks touching data/auth/runtime, inspect the existing contract before creat
 - relevant security findings.
 
 Default writes: local `supabase start`. Hosted reads use the approved non-production target unless the task explicitly says otherwise.
+
+**Known breakage — `supabase start` fails in this repository (verified 2026-09-28).** The pinned CLI (`supabase` 2.116.0) aborts before touching Docker:
+
+```text
+$ supabase start
+failed to parse config: missing private key
+```
+
+Cause is bisected, not guessed: the dotenvx-encrypted `.env.local` (values are `encrypted:…`, plus `DOTENV_PUBLIC_KEY_LOCAL`) is the trigger. The identical `supabase/config.toml` run from a directory *without* `.env.local` passes config parsing and starts containers. It is not `config.toml`, not the ambient shell environment, and not `.env.keys`, `.env.test`, `.env.agent`, or `.env.legacy-retired` — each was tested individually.
+
+Two verified workarounds, in order of preference:
+
+1. **Disposable Postgres plus this repository's own migrations.** Start any local Postgres, create the login role, then apply the pinned `mastra` migrations **in timestamp order** (`20260722093028_mastra_schema_pinned_1_12_0` → `20260722094055_mastra_runtime_grants_and_rls` → `20260822070000_ipi1008_mastra_workflow_definitions` → `20260927194500_ipi1332_mastra_1_71_schema_delta`). `127.0.0.1` is on the `src/mastra/pg-store.ts` allowlist. This is what the `mem-001-restart-history` CI job does, and it needs no new DDL.
+2. **Run the Supabase CLI from a copy of `supabase/` outside this working tree**, so `.env.local` is not discoverable from the CLI's working directory.
+
+Do not silently fall back to a second database provider to work around this. Report the breakage rather than working around it invisibly, and do not delete `.env.local` (the app needs it).
 
 Production/hosted writes are forbidden by default. An explicit Linear task may authorize a hosted synthetic proof only with verified project identity, synthetic IDs/namespaces, non-interference baseline/after proof, required guards such as `disableInit: true`, cleanup, and explicit authorization.
 
@@ -221,7 +247,7 @@ Rules: `.cursor/rules/`. Canonical skill source tree: `.agents/skills/`. Claude 
 
 ## PR instructions
 
-- Title: `IPI-NNN · TASK-ID — Plain English title`.
+- Title: `IPI-NNN · TASK-ID — Plain English title`. This is **machine-enforced**: CodeRabbit's pre-merge "Title check" fails the PR and blocks merge when the identifier, the middle dot, the spec identifier, or a plain-English outcome is missing (observed on PR #304). Fix the title; do not argue the check away.
 - One coherent concern; no unrelated dirty files.
 - Keep security/dependency diffs separate unless both are required for the same acceptance criteria.
 - PR description should include summary, faster/better approach, material architecture/user-flow Mermaid, what changed/did not change, tests/evidence, merge STOP conditions, and post-merge actions.
@@ -265,6 +291,10 @@ Existing-issue decision:
 - Assignment alone is not a reason to duplicate work; preserve or intentionally change ownership.
 
 If a new issue is required, apply the template through Linear's template field; do not replace the template body with a free-form description. Fill only relevant sections and write `Needs verification` for unknown facts. When materially correcting an existing issue, preserve the closest applicable template structure.
+
+**When the template field is unreachable (tooling gap).** The template field is only settable through tooling that exposes it. As of 2026-09-28 the sanctioned fallback `linear-cli` (0.3.28) has no `--template` flag, so a session without a template-capable Linear MCP cannot apply one. This is a third case — neither a non-standard issue nor a Linear outage. Handle it thus: create the issue with the closest approved template's structure written into the body, state in the body that the template field could not be set and why, record the tooling version, and continue. Do not block the task, and do not create a duplicate later solely to attach template metadata.
+
+**Identifiers are assigned, not chosen.** Linear assigns `IPI-NNN` at creation, so the `IPI-NNN · TASK-ID — Full title` form cannot be set in the create call. Create as `TASK-ID — Full title`, then rename to include the assigned identifier. A missing identifier in the title is drift, not a style preference.
 
 Before implementation, use one of two explicit paths:
 
@@ -310,7 +340,7 @@ Critical API names, versions, auth behavior, RLS assumptions, env keys, and URLs
 - Production/deployment secrets remain provider-managed (for example Vercel, GitHub Actions, Supabase, or Cloudflare). Local Dotenvx files are not production secret truth.
 - Coding agents must not be launched with the full `.env`/`.env.local`. Use `npm run agent:claude` or `npm run agent:codex`, which load only `.env.agent` and redact exact secret matches from stdout/stderr.
 - `--redact` is output protection, not an authorization boundary: the child process can read values loaded into it. Keep `.env.agent` minimal; service-role keys, database credentials, deployment tokens, and production credentials belong to their owning app/test/provider secret paths instead of `.env.agent`.
-- Real `.env*` files and `.env.keys` stay gitignored. Private keys must be owner-only (`chmod 600`) and must never appear in chat, logs, PRs, Linear, or model context.
+- Real `.env*` files and `.env.keys` stay gitignored. Private keys must be owner-only (`chmod 600`) and must never appear in chat, logs, PRs, Linear, or model context. A dated backup such as `.env.keys.pre-repair.<stamp>` is a **second, unmanaged copy of the same private keys**: it does not inherit the rule that protects `.env.keys`. Give it `chmod 600` if it must exist at all, delete it once the repair is verified, and never leave it in place as permanent state.
 - Never print, echo, `cat`, `dotenvx get`, or otherwise reveal secret values. Verify only variable names + presence.
 - Never use `dotenvx run --debug`, `dotenvx decrypt --stdout`, or any command that produces unmasked key/private-key output or otherwise prints secret values in agent or CI logs. Prefer names/presence checks and repository wrappers.
 - The legacy Infisical local binding is retired after names-only parity verification. Do not recreate it or use `infisical run` as the local secret path; local injection stays on Dotenvx and deployment secrets stay provider-managed.

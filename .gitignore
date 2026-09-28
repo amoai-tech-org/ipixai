@@ -72,3 +72,10 @@ supabase/.temp/
 
 # Codacy local generated analysis config
 /.codacy/
+
+# Kilo Code agent-manager state and worktrees. `.kilo/worktrees/<name>/` is a
+# full nested checkout (its own AGENTS.md, .claude/, node_modules), so an
+# unignored copy is a repo-in-a-repo waiting to be committed by accident.
+# Previously this was excluded only via .git/info/exclude, which git does not
+# share between clones — a fresh clone had no protection at all.
+/.kilo/
