@@ -55,7 +55,7 @@ Since you are running in a Supabase environment, take note of these Supabase-spe
   - [Call functions with `select`](#call-functions-with-select)
   - [Minimize joins](#minimize-joins)
   - [Specify roles in your policies](#specify-roles-in-your-policies)
-- [iPix lesson learned — a bulk-access policy doesn't cover "read your own row" (IPI-536/PR #347)](#ipix-lesson-learned-a-bulk-access-policy-doesnt-cover-read-your-own-row-ipi-536pr-347)
+- [iPix lesson learned — a bulk-access policy doesn't cover "read your own row" (IPI-536/PR #347)](#ipix-lesson-learned--a-bulk-access-policy-doesnt-cover-read-your-own-row-ipi-536pr-347)
 
 ---
 

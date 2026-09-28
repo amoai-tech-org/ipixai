@@ -37,8 +37,8 @@ This skill teaches agents how to create and deploy Supabase Edge Functions follo
   - [AI Agent Function Pattern](#ai-agent-function-pattern)
   - [Cost Tracking Pattern](#cost-tracking-pattern)
 - [Best Practices](#best-practices)
-  - [✅ DO](#do)
-  - [❌ DON'T](#dont)
+  - [✅ DO](#-do)
+  - [❌ DON'T](#-dont)
 - [Reference](#reference)
 
 ---

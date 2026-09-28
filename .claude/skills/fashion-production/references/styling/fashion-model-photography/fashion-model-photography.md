@@ -17,7 +17,7 @@ metadata:
 - [Document Outputs](#document-outputs)
 - [1. Casting Brief](#1-casting-brief)
 - [2. Model Direction Cards](#2-model-direction-cards)
-  - [Pose Vocabulary — On-Set Reference](#pose-vocabulary-on-set-reference)
+  - [Pose Vocabulary — On-Set Reference](#pose-vocabulary--on-set-reference)
 - [3. Stylist Pull List](#3-stylist-pull-list)
 - [4. HMU Brief](#4-hmu-brief)
 - [5. Photographer Direction](#5-photographer-direction)

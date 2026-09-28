@@ -16,7 +16,7 @@
   - [next.config.js](#nextconfigjs)
   - [Bundle Analysis](#bundle-analysis)
   - [Performance Monitoring](#performance-monitoring)
-- [CDN & Edge](#cdn-edge)
+- [CDN & Edge](#cdn--edge)
   - [Static Asset CDN](#static-asset-cdn)
   - [Edge Runtime](#edge-runtime)
 - [Caching Strategy](#caching-strategy)
@@ -25,7 +25,7 @@
 - [Database Connection Pooling](#database-connection-pooling)
 - [Health Check Endpoint](#health-check-endpoint)
 - [CI/CD with GitHub Actions](#cicd-with-github-actions)
-- [Monitoring & Logging](#monitoring-logging)
+- [Monitoring & Logging](#monitoring--logging)
 - [Quick Reference](#quick-reference)
 - [Production Checklist](#production-checklist)
 

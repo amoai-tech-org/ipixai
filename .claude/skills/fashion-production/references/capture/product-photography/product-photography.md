@@ -20,7 +20,7 @@ metadata:
   - [Type 3: Hero Shot](#type-3-hero-shot)
   - [Type 4: Detail Shot](#type-4-detail-shot)
   - [Type 5: Flat Lay](#type-5-flat-lay)
-- [Brand DNA → Product Shot Translation](#brand-dna-product-shot-translation)
+- [Brand DNA → Product Shot Translation](#brand-dna--product-shot-translation)
 - [Channel Export Requirements](#channel-export-requirements)
 - [Validation](#validation)
 
