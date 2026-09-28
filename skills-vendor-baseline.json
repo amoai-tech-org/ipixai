@@ -64,7 +64,7 @@
       "hash": "414dd5a96672b064da8dd2b6692a9ec84e43d090520b972c7ebad11e34462958"
     },
     ".claude/skills/cloudinary/references/node": {
-      "reason": "markdown frontmatter declares upstream author/hub (\"cloudinary\")",
+      "reason": "every markdown file declares upstream author/hub (\"cloudinary\")",
       "files": 8,
       "hash": "fe9d01c57fac5e056926664267ba62c0d1467c08987dc2d5fe5814f351b18c31"
     },

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,29 +40,70 @@ export function githubSlug(heading) {
     .replace(/ /g, "-");
 }
 
-/** Slugs for a heading list, in document order, with GitHub's `-1`, `-2` dedupe. */
+/**
+ * Slugs for a heading list, in document order, with GitHub's dedupe.
+ *
+ * GitHub's rule (the one `github-slugger` implements) is a `while` loop, not a
+ * one-shot suffix: it keeps bumping the counter until it lands on a slug that is
+ * still free. Getting this wrong is subtle and was a real defect here — for
+ * headings `Foo`, `Foo`, `Foo-1` a one-shot counter yields `foo`, `foo-1` and
+ * then reuses `foo-1`, while GitHub yields `foo`, `foo-1`, `foo-1-1`. The reuse
+ * makes this guard accept a link to an id no heading owns, and reject a link to
+ * the id GitHub does create.
+ */
 export function headingSlugSet(headings) {
-  const seen = new Map();
-  const slugs = new Set();
+  const counters = new Map();
+  const occupied = new Set();
   for (const heading of headings) {
     const base = githubSlug(heading);
-    const count = seen.get(base) ?? 0;
-    seen.set(base, count + 1);
-    slugs.add(count === 0 ? base : `${base}-${count}`);
+    let slug = base;
+    while (occupied.has(slug)) {
+      const next = (counters.get(base) ?? 0) + 1;
+      counters.set(base, next);
+      slug = `${base}-${next}`;
+    }
+    occupied.add(slug);
   }
-  return slugs;
+  return occupied;
+}
+
+/**
+ * Lines that are not inside a fenced code block, with their 1-based line numbers.
+ *
+ * A fence closes only with the same marker family (backtick or tilde) and a run
+ * at least as long as the opener, so a four-backtick fence may legitimately
+ * contain a three-backtick line. A naive toggle invents headings and links out of
+ * fenced examples: it treats `# example` inside a fence as a real heading, and
+ * reports an example `](#missing)` as a broken anchor. Both are false positives,
+ * which is the failure mode this guard is supposed to prevent, not cause.
+ */
+export function linesOutsideFences(text) {
+  const outside = [];
+  let fence = null;
+  text.split(/\r?\n/).forEach((line, index) => {
+    const match = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      const closes =
+        match !== null &&
+        match[1][0] === fence.marker &&
+        match[1].length >= fence.length &&
+        (fence.marker === "~" || match[2].trim() === "");
+      if (closes) fence = null;
+      return;
+    }
+    if (match) {
+      fence = { marker: match[1][0], length: match[1].length };
+      return;
+    }
+    outside.push({ number: index + 1, text: line });
+  });
+  return outside;
 }
 
 /** Heading texts (H1–H6) outside fenced code blocks. */
 export function markdownHeadings(text) {
   const headings = [];
-  let inFence = false;
-  for (const line of text.split(/\r?\n/)) {
-    if (line.trimStart().startsWith("```")) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
+  for (const { text: line } of linesOutsideFences(text)) {
     const match = line.match(/^#{1,6}\s+(.*?)\s*$/);
     if (match) headings.push(match[1]);
   }
@@ -101,7 +142,30 @@ function* markdownFiles(dir) {
 
 /** Every broken same-file anchor in an iPix-maintained skill markdown file. */
 export function findBrokenAnchors(repoRoot) {
-  const vendoredRoots = discoverVendoredRoots(repoRoot).map((root) => root.path);
+  // Canonicalise vendored roots to real paths before comparing. `.claude/skills/<name>`
+  // is normally a symlink to `.agents/skills/<name>`, and `markdownFiles` descends real
+  // directories rather than symlinks, so a literal comparison against the baseline's
+  // spelling silently fails to exclude the tree. Verified: 6 of the 10 `.claude/`-spelled
+  // vendored roots resolved to a `.agents/skills/` path that the walk actually produced,
+  // so those vendored trees were being scanned despite the exclusion.
+  const vendoredRealRoots = discoverVendoredRoots(repoRoot).map((root) => {
+    const absolute = join(repoRoot, root.path);
+    try {
+      return realpathSync(absolute);
+    } catch {
+      return absolute;
+    }
+  });
+  const isVendored = (file) => {
+    let real;
+    try {
+      real = realpathSync(file);
+    } catch {
+      real = file;
+    }
+    return vendoredRealRoots.some((root) => real === root || real.startsWith(root + sep));
+  };
+
   const broken = [];
   let scanned = 0;
   let skippedSnapshot = 0;
@@ -109,8 +173,8 @@ export function findBrokenAnchors(repoRoot) {
     const base = join(repoRoot, root);
     if (!existsSync(base)) continue;
     for (const file of markdownFiles(base)) {
+      if (isVendored(file)) continue;
       const rel = relative(repoRoot, file).split(sep).join("/");
-      if (vendoredRoots.some((v) => rel === v || rel.startsWith(`${v}/`))) continue;
       const text = readFileSync(file, "utf8");
       if (declaresExternalSource(text)) {
         skippedSnapshot += 1;
@@ -118,11 +182,11 @@ export function findBrokenAnchors(repoRoot) {
       }
       scanned += 1;
       const valid = headingSlugSet(markdownHeadings(text));
-      text.split(/\r?\n/).forEach((line, index) => {
+      for (const { number, text: line } of linesOutsideFences(text)) {
         for (const anchor of sameFileAnchors(line)) {
-          if (!valid.has(anchor)) broken.push({ file: rel, line: index + 1, anchor });
+          if (!valid.has(anchor)) broken.push({ file: rel, line: number, anchor });
         }
-      });
+      }
     }
   }
   return { broken, scanned, skippedSnapshot };

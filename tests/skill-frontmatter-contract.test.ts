@@ -29,10 +29,30 @@ import { parseDocument } from "yaml";
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SKILL_ROOTS = [".agents/skills", ".claude/skills"] as const;
 
-/** Agent Skills spec: lowercase letters, digits and hyphens; 64 characters max. */
-const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/**
+ * Agent Skills spec: non-empty, lowercase alphanumerics in hyphen-separated
+ * segments; 64 characters max.
+ *
+ * Deliberately not `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`. That nested quantifier trips a
+ * static ReDoS heuristic, and although the character classes are disjoint (so it
+ * is in fact linear), the explicit form below cannot be mistaken for a risk and
+ * costs nothing. The two are equivalent, and a test pins that over a generated
+ * corpus rather than asserting it in prose.
+ */
 const MAX_NAME_LENGTH = 64;
 const MAX_DESCRIPTION_LENGTH = 1024;
+
+function isValidSkillName(name: string): boolean {
+  if (name.length === 0 || name.startsWith("-") || name.endsWith("-") || name.includes("--")) {
+    return false;
+  }
+  return [...name].every(
+    (character) =>
+      (character >= "a" && character <= "z") ||
+      (character >= "0" && character <= "9") ||
+      character === "-",
+  );
+}
 
 interface SkillFile {
   /** Repository-relative POSIX path, e.g. `.agents/skills/mastra/SKILL.md`. */
@@ -123,6 +143,15 @@ function parseFrontmatter(file: SkillFile): ParseResult {
   return { ok: true, data: data as Record<string, unknown> };
 }
 
+/** Every string of the given length drawn from `alphabet`. */
+function everyString(alphabet: string[], length: number): string[] {
+  let result = [""];
+  for (let index = 0; index < length; index += 1) {
+    result = result.flatMap((prefix) => alphabet.map((character) => prefix + character));
+  }
+  return result;
+}
+
 const SKILL_FILES = findSkillFiles();
 const PARSED = SKILL_FILES.map((file) => ({ file, result: parseFrontmatter(file) }));
 const LOADABLE = PARSED.flatMap(({ file, result }) =>
@@ -160,7 +189,7 @@ describe("every SKILL.md is discoverable through valid frontmatter", () => {
       if (name.length > MAX_NAME_LENGTH) {
         problems.push(`\`name\` is ${name.length} characters (max ${MAX_NAME_LENGTH})`);
       }
-      if (!NAME_PATTERN.test(name)) {
+      if (!isValidSkillName(name)) {
         problems.push(`\`name\` "${name}" is not lowercase letters, digits and hyphens`);
       }
       return problems.map((problem) => ({ path: file.path, problem }));
@@ -205,6 +234,54 @@ describe("every SKILL.md is discoverable through valid frontmatter", () => {
       "A skill's frontmatter `name` must match its directory under the canonical " +
         "`.agents/skills/` tree, which is what `registry.json` points at. Nested " +
         "upstream packs are excluded: they legitimately namespace their `name`.",
+    ).toEqual([]);
+  });
+
+  it("the explicit name check is equivalent to the spec's regex", () => {
+    // The regex appears here only as an oracle for the corpus; the shipped check
+    // is `isValidSkillName`, which has no nested quantifier. If these ever
+    // disagree, the explicit form has silently changed the spec.
+    const ORACLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+    const alphabet = ["a", "z", "0", "9", "-", "A", "_"];
+    const candidates = [
+      "",
+      "-",
+      "--",
+      "a",
+      "ab",
+      "a-b",
+      "a--b",
+      "-a",
+      "a-",
+      "a-1",
+      "1-a",
+      "A",
+      "aB",
+      "a_b",
+      "a.b",
+      "a/b",
+      "a b",
+      "a--",
+      "--a",
+      "a-b-c",
+      "a-1-b",
+      "playwright-cli",
+      "qa-pr-analysis",
+      "ipix",
+      "0",
+      "9-9",
+      "-a-",
+      "a".repeat(64),
+      "a".repeat(65),
+      ...Array.from({ length: 5 }, (_, length) => everyString(alphabet, length)).flat(),
+    ];
+    const disagreements = candidates.filter(
+      (candidate) => isValidSkillName(candidate) !== ORACLE.test(candidate),
+    );
+    expect(
+      disagreements,
+      "`isValidSkillName` and the Agent Skills spec regex disagree; the explicit " +
+        "form is supposed to encode the same rule.",
     ).toEqual([]);
   });
 });

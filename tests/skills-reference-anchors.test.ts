@@ -1,3 +1,5 @@
+import { type Dirent, readdirSync, realpathSync } from "node:fs";
+import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -5,8 +7,11 @@ import {
   findBrokenAnchors,
   githubSlug,
   headingSlugSet,
+  linesOutsideFences,
   markdownHeadings,
+  sameFileAnchors,
 } from "../scripts/skills-reference-anchors.mjs";
+import { discoverVendoredRoots } from "../scripts/skills-vendor-baseline.mjs";
 
 /**
  * SKILLS-001 · IPI-1371 — every same-file anchor in an iPix-maintained skill
@@ -26,6 +31,12 @@ import {
  */
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const SKILL_ROOTS = [".claude/skills", ".agents/skills"];
+
+/** The same composition the guard uses: anchors on lines that are not inside a fence. */
+function anchorsOutsideFences(text: string): string[] {
+  return linesOutsideFences(text).flatMap(({ text: line }) => sameFileAnchors(line));
+}
 
 describe("GitHub heading slugs", () => {
   it.each([
@@ -53,6 +64,80 @@ describe("GitHub heading slugs", () => {
   it("ignores heading-like lines inside fenced code blocks", () => {
     const text = "# Title\n\n```bash\n# not a heading\n## neither is this\n```\n\n## Real\n";
     expect(markdownHeadings(text)).toEqual(["Title", "Real"]);
+  });
+
+  it("keeps bumping the suffix until the slug is actually free", () => {
+    // Expected values come from `github-slugger`. A one-shot counter returns
+    // `foo`, `foo-1`, `foo-1` for the first vector — reusing a slug that a later
+    // heading owns, which makes the guard accept a link to an id no heading has
+    // and reject a link to the id GitHub really creates.
+    expect([...headingSlugSet(["Foo", "Foo", "Foo-1"])]).toEqual(["foo", "foo-1", "foo-1-1"]);
+    expect([...headingSlugSet(["Foo", "Foo-1", "Foo"])]).toEqual(["foo", "foo-1", "foo-2"]);
+  });
+
+  it("closes a four-backtick fence only at four or more backticks", () => {
+    const text = "````md\n```\n# Hidden\n```\n````\n\n# Real\n";
+    expect(markdownHeadings(text)).toEqual(["Real"]);
+  });
+
+  it("recognises tilde fences", () => {
+    const text = "~~~\n# Hidden\n~~~\n\n# Real\n";
+    expect(markdownHeadings(text)).toEqual(["Real"]);
+  });
+
+  it("does not read anchors out of fenced examples", () => {
+    const text = "```md\nsee [x](#not-a-real-anchor)\n```\n\n[real](#real)\n\n## Real\n";
+    expect(anchorsOutsideFences(text)).toEqual(["real"]);
+  });
+});
+
+describe("vendored trees are excluded from the anchor scan", () => {
+  const vendoredRealRoots = new Set(
+    discoverVendoredRoots(REPO_ROOT).map((root) => {
+      try {
+        return realpathSync(join(REPO_ROOT, root.path));
+      } catch {
+        return join(REPO_ROOT, root.path);
+      }
+    }),
+  );
+
+  // Mirrors `markdownFiles` in the guard: `readdirSync(..., {withFileTypes:true})`
+  // does not follow symlinks, so `.claude/skills/<name>` is not descended and the
+  // same tree is reached as `.agents/skills/<name>`.
+  const candidateFiles: string[] = [];
+  const walk = (dir: string): void => {
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".md")) candidateFiles.push(full);
+    }
+  };
+  for (const root of SKILL_ROOTS) walk(join(REPO_ROOT, root));
+
+  const vendoredFiles = candidateFiles.filter((file) => {
+    const real = realpathSync(file);
+    return [...vendoredRealRoots].some((root) => real === root || real.startsWith(root + sep));
+  });
+
+  it("actually finds vendored markdown to exclude", () => {
+    // Without this the assertion below would hold vacuously.
+    expect(vendoredFiles.length).toBeGreaterThan(0);
+  });
+
+  it("scans every non-vendored file and no vendored one", () => {
+    // This is the assertion that fails when the exclusion silently stops working.
+    // `.claude/skills/<name>` symlinks to `.agents/skills/<name>`, so the baseline
+    // records one spelling while the walk produces the other; comparing the two
+    // literally excluded nothing for 6 of the 10 vendored roots.
+    const { scanned, skippedSnapshot } = findBrokenAnchors(REPO_ROOT);
+    expect(scanned + skippedSnapshot).toBe(candidateFiles.length - vendoredFiles.length);
   });
 });
 

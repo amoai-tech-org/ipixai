@@ -1,11 +1,15 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import {
   BASELINE_FILENAME,
   baselinePath,
   buildBaseline,
+  diffBaseline,
+  discoverVendoredRoots,
 } from "../scripts/skills-vendor-baseline.mjs";
 
 /**
@@ -78,5 +82,119 @@ describe("vendored skill content is unchanged", () => {
     // Guards against the discovery rule silently returning nothing, which would
     // make every assertion above vacuously true.
     expect(Object.keys(current.skills).length).toBeGreaterThan(3);
+  });
+});
+
+describe("reference-pack discovery reads every markdown file", () => {
+  const created: string[] = [];
+  afterAll(() => {
+    for (const root of created) rmSync(root, { recursive: true, force: true });
+  });
+
+  const upstream = (author: string): string => `---\nauthor: ${author}\nversion: 1.0.0\n---\n\n# x\n`;
+
+  const makeRepo = (files: Record<string, string>): string => {
+    const root = mkdtempSync(join(tmpdir(), "ipix-vendor-"));
+    created.push(root);
+    for (const [relativePath, body] of Object.entries(files)) {
+      const full = join(root, relativePath);
+      mkdirSync(dirname(full), { recursive: true });
+      writeFileSync(full, body);
+    }
+    return root;
+  };
+
+  const host = { ".agents/skills/host/SKILL.md": "---\nname: host\ndescription: d\n---\n" };
+
+  it("classifies a pack when every markdown file declares upstream", () => {
+    const root = makeRepo({
+      ...host,
+      ".agents/skills/host/references/pack/00-intro.md": upstream("upstream-co"),
+      ".agents/skills/host/references/pack/official.md": upstream("upstream-co"),
+    });
+    expect(discoverVendoredRoots(root).map((entry) => entry.path)).toContain(
+      ".agents/skills/host/references/pack",
+    );
+  });
+
+  it("does not classify a mixed directory, which would freeze iPix-authored siblings", () => {
+    // The real case: `.claude/skills/ipix-supabase/references/` holds one upstream
+    // snapshot (`postgres-best-practices.md`, `metadata.author: supabase`) beside
+    // three iPix-authored files. Treating the directory as a pack would put those
+    // three behind the drift guard and drop them from the anchor guard too.
+    //
+    // Residual limitation, stated rather than hidden: a genuinely mixed directory
+    // is therefore not classified as a pack. `UPSTREAM.md` remains the explicit
+    // marker for a pack, and per-file snapshots are outside tree-level hashing.
+    const root = makeRepo({
+      ...host,
+      ".agents/skills/host/references/mixed/00-intro.md": "# iPix-authored, no frontmatter\n",
+      ".agents/skills/host/references/mixed/official.md": upstream("upstream-co"),
+    });
+    expect(discoverVendoredRoots(root).map((entry) => entry.path)).not.toContain(
+      ".agents/skills/host/references/mixed",
+    );
+  });
+
+  it("still honours UPSTREAM.md regardless of markdown frontmatter", () => {
+    const root = makeRepo({
+      ...host,
+      ".agents/skills/host/references/pack/UPSTREAM.md": "# vendored from upstream\n",
+      ".agents/skills/host/references/pack/index.md": "# no frontmatter at all\n",
+    });
+    expect(discoverVendoredRoots(root).map((entry) => entry.path)).toContain(
+      ".agents/skills/host/references/pack",
+    );
+  });
+
+  it("does not classify a pack that carries an iPix overlay", () => {
+    const root = makeRepo({
+      ...host,
+      ".agents/skills/host/references/pack/a.md": upstream("upstream-co"),
+      ".agents/skills/host/references/pack/b.md":
+        "---\nauthor: upstream-co\nversion: 1.1.0-ipix.2\n---\n\n# ours\n",
+    });
+    expect(discoverVendoredRoots(root).map((entry) => entry.path)).not.toContain(
+      ".agents/skills/host/references/pack",
+    );
+  });
+});
+
+describe("the vendor check can actually fail", () => {
+  const built = {
+    skills: {
+      "a/one": { reason: "x", files: 1, hash: "aaaa" },
+      "a/two": { reason: "x", files: 1, hash: "bbbb" },
+    },
+  };
+
+  it("reports no drift when the committed baseline matches", () => {
+    expect(diffBaseline(built, built)).toEqual({ missing: [], stale: [], drifted: [] });
+  });
+
+  it("reports an in-place edit", () => {
+    const committed = { skills: { ...built.skills, "a/two": { reason: "x", files: 1, hash: "cccc" } } };
+    expect(diffBaseline(committed, built).drifted).toEqual([
+      { path: "a/two", expected: "cccc", actual: "bbbb" },
+    ]);
+  });
+
+  it("reports a new and a removed pack", () => {
+    const committed = { skills: { "a/one": { reason: "x", files: 1, hash: "aaaa" }, "a/gone": { reason: "x", files: 1, hash: "dddd" } } };
+    expect(diffBaseline(committed, built)).toMatchObject({ missing: ["a/two"], stale: ["a/gone"] });
+  });
+
+  it("wires that comparison into the check command instead of only printing", () => {
+    // The command is named `skills:vendor:check`; before this it printed the
+    // discovered trees and exited 0 no matter what drifted, which is a comfort
+    // rather than a guard. Pinned structurally because the CLI resolves its own
+    // repository root and cannot be pointed at a fixture.
+    const source = readFileSync(
+      fileURLToPath(new URL("../scripts/skills-vendor-baseline.mjs", import.meta.url)),
+      "utf8",
+    );
+    const checkBranch = source.slice(source.indexOf("} else {"));
+    expect(checkBranch).toContain("diffBaseline(");
+    expect(checkBranch).toContain("process.exitCode = 1");
   });
 });

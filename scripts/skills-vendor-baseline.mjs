@@ -101,7 +101,17 @@ export function hashTree(dir) {
   return createHash("sha256").update(entries.join("\n")).digest("hex");
 }
 
-/** Every `references/**` subtree that is a vendor pack rather than iPix content. */
+/**
+ * Every `references/**` subtree that is a vendor pack rather than iPix content.
+ *
+ * Only *sub*trees are considered. The skill root is classified by its own
+ * `SKILL.md` frontmatter (above), never by sibling markdown: `ipix-supabase`
+ * ships upstream Supabase snapshots as `postgres.md` and `client-and-auth.md`
+ * (`author: supabase`) alongside its own content, so judging the root by any
+ * markdown file would exempt the whole skill — including its iPix-authored
+ * files — from the drift guard and the anchor guard. That is why discovery starts
+ * one level down.
+ */
 function vendoredReferencePacks(skillDir) {
   const found = [];
   const walk = (current) => {
@@ -117,19 +127,26 @@ function vendoredReferencePacks(skillDir) {
     }
     const markdown = names.filter((name) => name.endsWith(".md"));
     if (markdown.length > 0) {
-      const first = readFrontmatter(join(current, markdown[0]));
-      const author = frontValue(first, "author");
-      const hub = frontValue(first, "hub");
-      const anyIpixOverlay = markdown.some((name) =>
-        isIpixOverlay(readFrontmatter(join(current, name))),
+      // Inspect *every* markdown file, and require them to agree, rather than
+      // looking only at `markdown[0]`. Two reasons:
+      //
+      //  - Order independence. Reading one arbitrary file misses a pack whose
+      //    upstream declaration lives in a later file, and a missed pack is never
+      //    hashed, so edits to it go unchecked.
+      //  - Unanimity, not "any". A single upstream file among siblings that
+      //    declare nothing is a snapshot *file*, not a snapshot *directory*.
+      //    `.claude/skills/ipix-supabase/references/` is exactly that case: one
+      //    upstream `postgres-best-practices.md` beside three iPix-authored
+      //    files. Calling the directory a pack would freeze those three behind
+      //    the drift guard and drop them from the anchor guard as well.
+      const fronts = markdown.map((name) => readFrontmatter(join(current, name)));
+      const upstreams = fronts.map(
+        (front) => frontValue(front, "author") || frontValue(front, "hub"),
       );
-      if (
-        (isUpstreamAuthor(author) || (hub.length > 0 && isUpstreamAuthor(hub))) &&
-        !anyIpixOverlay
-      ) {
+      if (upstreams.every((value) => isUpstreamAuthor(value)) && !fronts.some(isIpixOverlay)) {
         found.push({
           path: current,
-          reason: `markdown frontmatter declares upstream author/hub ("${author || hub}")`,
+          reason: `every markdown file declares upstream author/hub ("${upstreams[0]}")`,
         });
         return;
       }
@@ -143,7 +160,21 @@ function vendoredReferencePacks(skillDir) {
       }
     }
   };
-  walk(skillDir);
+
+  let children;
+  try {
+    children = readdirSync(skillDir).sort();
+  } catch {
+    return found;
+  }
+  for (const name of children) {
+    const full = join(skillDir, name);
+    try {
+      if (statSync(full).isDirectory()) walk(full);
+    } catch {
+      /* unreadable entry */
+    }
+  }
   return found;
 }
 
@@ -238,6 +269,23 @@ export function baselinePath(repoRoot) {
   return join(repoRoot, BASELINE_FILENAME);
 }
 
+/**
+ * How a freshly built baseline differs from the committed one.
+ *
+ * The command named `skills:vendor:check` must be able to fail, or it is a
+ * comfort rather than a guard: a vendored file can change while the manifest
+ * stays put, and a check that only prints the discovered trees exits 0 anyway.
+ */
+export function diffBaseline(committed, built) {
+  const committedSkills = committed?.skills ?? {};
+  const missing = Object.keys(built.skills).filter((path) => !(path in committedSkills));
+  const stale = Object.keys(committedSkills).filter((path) => !(path in built.skills));
+  const drifted = Object.keys(built.skills)
+    .filter((path) => path in committedSkills && committedSkills[path].hash !== built.skills[path].hash)
+    .map((path) => ({ path, expected: committedSkills[path].hash, actual: built.skills[path].hash }));
+  return { missing, stale, drifted };
+}
+
 const isCli = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 if (isCli) {
   const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -250,7 +298,36 @@ if (isCli) {
       console.log(`   ${built.skills[name].hash.slice(0, 12)}…  ${name}`);
     }
   } else {
-    console.log(`${names.length} vendored trees discovered:`);
-    for (const name of names) console.log(`   ${name}\n       ${built.skills[name].reason}`);
+    const file = baselinePath(repoRoot);
+    if (!existsSync(file)) {
+      console.error(
+        `missing ${BASELINE_FILENAME}; generate it with: node scripts/skills-vendor-baseline.mjs --write`,
+      );
+      process.exitCode = 1;
+    } else {
+      const { missing, stale, drifted } = diffBaseline(
+        JSON.parse(readFileSync(file, "utf8")),
+        built,
+      );
+      const problems = missing.length + stale.length + drifted.length;
+      if (problems === 0) {
+        console.log(`${names.length} vendored trees match ${BASELINE_FILENAME}`);
+      } else {
+        process.exitCode = 1;
+        console.error(`${problems} vendored-tree problem(s) against ${BASELINE_FILENAME}:`);
+        for (const path of missing) console.error(`   not in baseline (new vendored pack?)  ${path}`);
+        for (const path of stale) console.error(`   in baseline but no longer discovered   ${path}`);
+        for (const entry of drifted) {
+          console.error(
+            `   edited in place                        ${entry.path}\n` +
+              `       expected ${entry.expected.slice(0, 12)}…  actual ${entry.actual.slice(0, 12)}…`,
+          );
+        }
+        console.error(
+          "Vendored content changes by re-vendoring from upstream, then regenerate deliberately:\n" +
+            "   node scripts/skills-vendor-baseline.mjs --write",
+        );
+      }
+    }
   }
 }
