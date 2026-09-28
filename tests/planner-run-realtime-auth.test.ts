@@ -20,4 +20,9 @@ describe("IPI-1117 Planner run Realtime authorization", () => {
     expect(sql).toContain("^planner-run:");
     expect(sql).toContain("[0-9a-f]{64}$");
   });
+
+  it("uses the exact channel-authorizer instead of a broad planner-run prefix policy", () => {
+    expect(sql).not.toContain("like 'planner-run:%'");
+    expect(sql.match(/planner\.can_use_run_channel\(realtime\.topic\(\)\)/g)).toHaveLength(2);
+  });
 });
