@@ -18,6 +18,8 @@ All notable verified changes to iPix are recorded here. This file follows [Keep 
 
 ### Changed
 
+- IPI-1373 · DOC-PRD-TRUTH-001 — Truth-synced the master PRD and current AI/platform architecture docs to the in-process Production Planner contract without duplicating runtime package pins. Product intent, implementation truth, and Linear execution truth are now separated; exact-artifact HITL, least-privilege RPC rules, telemetry privacy, WCAG 2.2 AA, exact-run Stop/recovery, current-vs-planned AI capabilities, unnumbered ADR candidates, and stable Linear workstreams are explicit and regression-guarded.
+
 ### Deprecated
 
 ### Removed
