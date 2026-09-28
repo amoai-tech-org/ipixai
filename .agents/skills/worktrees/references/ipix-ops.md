@@ -76,8 +76,8 @@ If unsure → `ipi/docs-preservation-<slug>` branch/PR before remove.
 ### 4. Machine gates (must pass)
 
 ```bash
-npm run worktree:pre-delete              # from inside $WT
-node scripts/worktree-health.mjs --pre-delete
+git -C "$WT" status --porcelain                 # from inside $WT — must be empty
+git -C "$WT" log --oneline origin/main..HEAD    # commits not on origin/main must be intentional
 ```
 
 ### 5. Remove only when clean
@@ -156,7 +156,7 @@ git branch --merged origin/main | grep -vE '^\*|(^|\s)main$' | xargs -r git bran
 
 # for each merged/abandoned worktree from `git worktree list`:
 #   1. Run Documentation preservation gate (above) — commit/split docs first
-#   2. npm run worktree:pre-delete inside that worktree
+#   2. Confirm zero uncommitted/untracked doc paths inside that worktree
 git worktree remove <path>              # add --force only after salvage gate + backup (see SKILL.md)
 ```
 

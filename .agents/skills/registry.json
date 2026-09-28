@@ -37,6 +37,42 @@
       "claude_exposed": true,
       "canonical": ".agents/skills/brainstorming"
     },
+    "ci-review": {
+      "owner": "engineering-quality",
+      "type": "review",
+      "summary": "Review iPix GitHub Actions workflows and verification scripts for trust-boundary, permissions, secret, exact-head, and false-green regressions.",
+      "modes": [
+        "ci-review"
+      ],
+      "delegates_to": [
+        "tasks",
+        "pr"
+      ],
+      "do_not_use_for": [
+        "reviewing application source changes",
+        "authoring product requirements"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/ci-review"
+    },
+    "cloudinary": {
+      "owner": "engineering",
+      "type": "integration",
+      "summary": "Cloudinary media workflows for iPix: upload, transformation, delivery, and asset-pipeline integration.",
+      "modes": [
+        "media-pipeline"
+      ],
+      "delegates_to": [
+        "nextjs-developer",
+        "tasks"
+      ],
+      "do_not_use_for": [
+        "commerce or order truth",
+        "Supabase schema and RLS design"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/cloudinary"
+    },
     "code-review": {
       "owner": "engineering-quality",
       "type": "review",
@@ -78,6 +114,24 @@
       ],
       "claude_exposed": true,
       "canonical": ".agents/skills/codebase-design"
+    },
+    "copilotkit": {
+      "owner": "engineering",
+      "type": "integration",
+      "summary": "CopilotKit and AG-UI integration for iPix: runtime wiring, hooks, transport, and interactive AI UX.",
+      "modes": [
+        "ai-ux-integration"
+      ],
+      "delegates_to": [
+        "mastra",
+        "nextjs-developer"
+      ],
+      "do_not_use_for": [
+        "Mastra agent, tool, workflow, or memory design",
+        "Supabase schema and RLS design"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/copilotkit"
     },
     "diagnosing-bugs": {
       "owner": "engineering",
@@ -189,6 +243,40 @@
         "autonomous exploratory browser test"
       ]
     },
+    "fashion-production": {
+      "owner": "product-planning",
+      "type": "methodology",
+      "summary": "Fashion production domain guidance for iPix: garment, shoot, sample, and production-stage terminology and workflow.",
+      "modes": [
+        "domain-guidance"
+      ],
+      "delegates_to": [
+        "tasks"
+      ],
+      "do_not_use_for": [
+        "implementing code",
+        "Supabase schema, RLS, or migration work"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/fashion-production"
+    },
+    "graphify": {
+      "owner": "developer-experience",
+      "type": "utility",
+      "summary": "Turn source, docs, papers, images, and video into a persistent queryable knowledge graph, and answer codebase and architecture questions from it.",
+      "modes": [
+        "codebase-discovery",
+        "dependency-analysis"
+      ],
+      "delegates_to": [
+        "tasks"
+      ],
+      "do_not_use_for": [
+        "authoritative runtime, database, or provider truth"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/graphify"
+    },
     "improve-test-cases": {
       "owner": "qa",
       "type": "workflow",
@@ -207,6 +295,44 @@
       "claude_exposed": false,
       "canonical": ".agents/skills/improve-test-cases"
     },
+    "ipix-supabase": {
+      "owner": "engineering",
+      "type": "workflow",
+      "summary": "iPix Supabase work: schema, RLS, policies, RPC, migrations, Edge Functions, local replay, and security review.",
+      "modes": [
+        "database-change",
+        "security-review",
+        "local-replay"
+      ],
+      "delegates_to": [
+        "tasks",
+        "task-verifier"
+      ],
+      "do_not_use_for": [
+        "hosted production writes without explicit task authorization",
+        "UI or wireframe design"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/ipix-supabase"
+    },
+    "ipix-wireframe": {
+      "owner": "product-planning",
+      "type": "methodology",
+      "summary": "Specify implementation-ready iPix screens, user journeys, wireframes, prototypes, and AI/HITL interactions before implementation.",
+      "modes": [
+        "ux-specification"
+      ],
+      "delegates_to": [
+        "tasks",
+        "mermaid-diagrams"
+      ],
+      "do_not_use_for": [
+        "building the production UI",
+        "database or RLS design"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/ipix-wireframe"
+    },
     "lean": {
       "owner": "developer-experience",
       "type": "audit",
@@ -222,6 +348,81 @@
       ],
       "claude_exposed": true,
       "canonical": ".agents/skills/lean"
+    },
+    "linear": {
+      "owner": "execution",
+      "type": "integration",
+      "summary": "Linear task operations for iPix: read live issue state, dependencies, and acceptance criteria, and record verified progress and evidence.",
+      "modes": [
+        "task-tracking"
+      ],
+      "delegates_to": [
+        "tasks"
+      ],
+      "do_not_use_for": [
+        "implementation work",
+        "pull request review"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/linear"
+    },
+    "mastra": {
+      "owner": "engineering",
+      "type": "integration",
+      "summary": "Mastra framework work for iPix: agents, tools, workflows, memory, streaming, PostgresStore, Studio/API, MCP, observability, and evals.",
+      "modes": [
+        "agent-implementation",
+        "workflow-implementation",
+        "memory-and-storage"
+      ],
+      "delegates_to": [
+        "ipix-supabase",
+        "tasks",
+        "task-verifier"
+      ],
+      "do_not_use_for": [
+        "Supabase RLS and migration design",
+        "interactive AI UX transport"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/mastra"
+    },
+    "mermaid-diagrams": {
+      "owner": "architecture",
+      "type": "methodology",
+      "summary": "Mermaid diagrams as an iPix engineering reasoning tool for architecture, ownership, dependencies, state, failure paths, and verification.",
+      "modes": [
+        "reasoning-pass",
+        "diagram-authoring"
+      ],
+      "delegates_to": [
+        "tasks"
+      ],
+      "do_not_use_for": [
+        "replacing executable tests or runtime evidence",
+        "decorative documentation only"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/mermaid-diagrams"
+    },
+    "nextjs-developer": {
+      "owner": "engineering",
+      "type": "workflow",
+      "summary": "Next.js and React implementation guidance for iPix, including App Router, server/client boundaries, data fetching, and rendering.",
+      "modes": [
+        "ui-implementation",
+        "framework-upgrade"
+      ],
+      "delegates_to": [
+        "vercel-react-best-practices",
+        "tasks"
+      ],
+      "do_not_use_for": [
+        "Mastra agent or workflow design",
+        "Supabase RLS design"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/nextjs-developer"
     },
     "playwright-cli": {
       "owner": "qa-browser",
@@ -266,6 +467,25 @@
         "do we really need this",
         "simplest solution that works"
       ]
+    },
+    "pr": {
+      "owner": "execution",
+      "type": "workflow",
+      "summary": "Manage the iPix GitHub pull request lifecycle: status, review findings, exact-head evidence, shipping approved changes, and post-merge proof.",
+      "modes": [
+        "pr-review",
+        "pr-ship"
+      ],
+      "delegates_to": [
+        "tasks",
+        "ci-review"
+      ],
+      "do_not_use_for": [
+        "implementing the change itself",
+        "merging without explicit human approval"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/pr"
     },
     "prima": {
       "owner": "qa-browser",
@@ -601,6 +821,23 @@
       "claude_exposed": false,
       "canonical": ".agents/skills/setup-ci-automation"
     },
+    "shadcn": {
+      "owner": "engineering",
+      "type": "integration",
+      "summary": "Manage shadcn/ui components and projects: adding, searching, fixing, debugging, styling, and composing UI, including chat interfaces.",
+      "modes": [
+        "component-work"
+      ],
+      "delegates_to": [
+        "nextjs-developer"
+      ],
+      "do_not_use_for": [
+        "framework-level routing or data fetching decisions",
+        "Supabase or Mastra work"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/shadcn"
+    },
     "subagent-driven-development": {
       "owner": "execution",
       "type": "methodology",
@@ -618,6 +855,43 @@
       ],
       "claude_exposed": true,
       "canonical": ".agents/skills/subagent-driven-development"
+    },
+    "task-verifier": {
+      "owner": "engineering-quality",
+      "type": "review",
+      "summary": "Independently challenge what a task has left unproven, including adversarial review for security, data, AI/HITL, release, and secret risk.",
+      "modes": [
+        "verification",
+        "adversarial-review"
+      ],
+      "delegates_to": [
+        "tasks"
+      ],
+      "do_not_use_for": [
+        "implementing the change being verified",
+        "replacing required CI or runtime evidence"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/task-verifier"
+    },
+    "tasks": {
+      "owner": "execution",
+      "type": "workflow",
+      "summary": "Define and execute substantial iPix tasks: structure, progress, pull request, evidence, merge gates, and post-merge standards.",
+      "modes": [
+        "task-lifecycle"
+      ],
+      "delegates_to": [
+        "task-verifier",
+        "pr",
+        "mermaid-diagrams"
+      ],
+      "do_not_use_for": [
+        "domain implementation how-to",
+        "replacing CI or runtime proof"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/tasks"
     },
     "tdd": {
       "owner": "engineering",
@@ -717,6 +991,40 @@
         "turn this conversation into a spec",
         "conversation to spec"
       ]
+    },
+    "vercel-react-best-practices": {
+      "owner": "engineering",
+      "type": "methodology",
+      "summary": "React and Next.js performance optimization guidelines from Vercel Engineering for writing, reviewing, and refactoring React/Next.js code.",
+      "modes": [
+        "performance-review"
+      ],
+      "delegates_to": [
+        "nextjs-developer"
+      ],
+      "do_not_use_for": [
+        "non-React performance work",
+        "Mastra or Supabase internals"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/vercel-react-best-practices"
+    },
+    "worktrees": {
+      "owner": "developer-experience",
+      "type": "utility",
+      "summary": "Create and manage isolated git worktrees for iPix tasks so multi-step work starts from clean, current main.",
+      "modes": [
+        "workspace-isolation"
+      ],
+      "delegates_to": [
+        "tasks"
+      ],
+      "do_not_use_for": [
+        "branch or merge policy decisions",
+        "implementation work itself"
+      ],
+      "claude_exposed": true,
+      "canonical": ".agents/skills/worktrees"
     },
     "writing-plans": {
       "owner": "planning",

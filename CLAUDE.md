@@ -54,9 +54,11 @@ They produce evidence. They do not replace `tasks`, domain skills, CI, or `task-
 
 This repository has **no generated build/start/run recipe skill** — nothing under `.claude/skills/` or `.agents/skills/` matches one — so `/run` and `/verify` currently improvise the recipe each time. From clean current `main`:
 
-1. run `/run-skill-generator` once to record the real iPix build/start/run recipe as a project skill;
+1. use the Claude-provided `skill-creator` skill to record the real iPix build/start/run recipe as a project skill;
 2. review and verify the generated recipe before committing it in a small follow-up PR;
-3. run `/skill-doctor` locally to find unused or high-context skills and tune descriptions/visibility.
+3. use the same `skill-creator` workflow to find unused or high-context skills and tune descriptions/visibility.
+
+There is **no `/run-skill-generator` and no `/skill-doctor` command in this repository** — `.claude/commands/` holds only `explain`, `fastest`, `pr`, and `pr-audit`. Do not plan around them; `skill-creator` is provided by the agent environment, not by this repo.
 
 These are **outstanding**, not historical. They were written as "after PR #106 merges"; PR #106 merged on 2026-09-09, so that trigger is spent and the work is simply unstarted. Track it in Linear rather than re-deriving it from this note.
 

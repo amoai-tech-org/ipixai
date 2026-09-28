@@ -188,14 +188,24 @@ describe("IPI-1370 AGENT-DOCS-001: agent contract files describe the real reposi
     expect(agents).toContain("no agent-side override");
   });
 
-  it("records the verified local-database breakage and its workarounds", () => {
+  it("records the verified local-Supabase root cause and the supported local path", () => {
     const agents = read("AGENTS.md");
+    // IPI-1374 fixed this rather than documenting a workaround, so the assertions pin the
+    // fix: the failure a developer still sees when bypassing the wrapper, the mechanism
+    // that causes it, the supported entry point, and why CI is unaffected.
     expect(agents).toContain("failed to parse config: missing private key");
-    expect(agents).toContain("dotenvx-encrypted `.env.local`");
-    expect(agents).toContain("`supabase start` remains the normal local Supabase path when project config loads successfully");
-    expect(agents).toContain("For full Supabase proofs");
+    expect(agents).toContain("DOTENV_PRIVATE_KEY_LOCAL");
+    expect(agents).toContain("`env(NAME)`");
+    expect(agents).toContain("npm run supabase:cli -- start");
+    expect(agents).toContain("npm run supabase:cli -- db reset --local");
+    expect(agents).toContain("--ignore=MISSING_ENV_FILE");
     expect(agents).toContain("For Mastra/Postgres-only proofs");
     expect(agents).not.toContain("Default writes: **disposable Postgres");
+    // The workaround-era framing must not return: the conflict is resolved, so
+    // "run the CLI from a copy of `supabase/` outside this working tree" is no longer
+    // the documented path for full Supabase proofs.
+    expect(agents).not.toContain("Known local-environment breakage");
+    expect(agents).not.toContain("For full Supabase proofs");
   });
 
   it("documents accidental credential exposure recovery", () => {

@@ -1,8 +1,9 @@
 import { type Stats, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseDocument } from "yaml";
+import { discoverVendoredRoots } from "../scripts/skills-vendor-baseline.mjs";
 
 /**
  * SKILLS-001 · IPI-1371 — every `SKILL.md` must be loadable through valid frontmatter.
@@ -299,6 +300,154 @@ describe("every SKILL.md is discoverable through valid frontmatter", () => {
       disagreements,
       "`isValidSkillName` and the Agent Skills spec regex disagree; the explicit " +
         "form is supposed to encode the same rule.",
+    ).toEqual([]);
+  });
+});
+
+/**
+ * IPI-1374 leaf 1 — an auto-invokable skill must say *when* to use it.
+ *
+ * `description` is the only text the model routes on, so a description that only
+ * states WHAT a skill does makes selection a guess. A full re-audit of all 53
+ * canonical skills found exactly three without a WHEN clause, and all three are
+ * legitimate exemptions rather than defects:
+ *
+ *   - `improve-test-cases` and `qa-automation-test-consolidation` are hash-locked
+ *     vendored snapshots (`skills-lock.json`, author Testomat.io). Editing them is
+ *     forbidden, and the next re-vendor would discard the edit, so their routing is
+ *     carried by `registry.json` metadata instead — asserted below.
+ *   - `to-spec` sets `disable-model-invocation: true`, so it is never auto-selected
+ *     and needs no trigger prose. The rule below skips it for that reason.
+ *
+ * The two earlier audits that fed IPI-1371 and IPI-1374 disagreed because a loose
+ * "does it look like a trigger?" eyeball is unstable. This states the rule
+ * mechanically and pins the detector against samples in both directions.
+ */
+const TRIGGER_MARKERS = [
+  "use this when",
+  "use when",
+  "use whenever",
+  "use for",
+  "use on",
+  "use before",
+  "use during",
+  "use after",
+  "use it when",
+  "use to",
+  "use as",
+  "use this",
+  "applies when",
+  "applies to",
+  "activates",
+  "triggers",
+  "trigger",
+  "when the user",
+  "when asked",
+  "when you",
+  "when a ",
+  "when an ",
+  "whenever",
+  "should be used",
+  "used when",
+  "asks about",
+  "mentions",
+];
+
+function statesWhenToUse(description: string): boolean {
+  const text = description.toLowerCase();
+  return TRIGGER_MARKERS.some((marker) => text.includes(marker));
+}
+
+const VENDORED_REAL_ROOTS = new Set(
+  discoverVendoredRoots(REPO_ROOT).map((root) => {
+    try {
+      return realpathSync(join(REPO_ROOT, root.path));
+    } catch {
+      return join(REPO_ROOT, root.path);
+    }
+  }),
+);
+
+function isVendoredSkillPath(path: string): boolean {
+  let real: string;
+  try {
+    real = realpathSync(join(REPO_ROOT, path));
+  } catch {
+    real = join(REPO_ROOT, path);
+  }
+  return [...VENDORED_REAL_ROOTS].some((root) => real === root || real.startsWith(root + sep));
+}
+
+const REGISTRY = JSON.parse(
+  readFileSync(join(REPO_ROOT, ".agents/skills/registry.json"), "utf8"),
+) as {
+  skills: Record<string, { modes?: string[]; do_not_use_for?: string[] }>;
+};
+
+describe("an auto-invokable skill states when to use it (IPI-1374)", () => {
+  const canonical = LOADABLE.filter(({ file }) => file.path.startsWith(".agents/skills/"));
+  const modelInvocable = canonical.filter(({ data }) => data["disable-model-invocation"] !== true);
+  const nonVendored = modelInvocable.filter(({ file }) => !isVendoredSkillPath(file.path));
+
+  it("the trigger detector separates WHEN descriptions from WHAT-only ones", () => {
+    // Non-vacuity: a detector that returned true (or false) unconditionally would
+    // make the rule below either vacuous or permanently red.
+    const shouldMatch = [
+      "Use when the user asks to deploy the planner.",
+      "Applies when working with shadcn/ui or a components.json file.",
+      "This skill should be used when writing or reviewing React code.",
+      "Use on every substantial Linear task and PR to model architecture.",
+    ];
+    const shouldNotMatch = [
+      "Convert approved manual test cases into maintainable automated tests.",
+      "Detect redundant tests, duplicated test logic, and semantic overlaps.",
+      "Mermaid diagrams as an iPix engineering reasoning tool, not presentation.",
+      "Detect flaky tests and trim the suite.",
+    ];
+    expect(shouldMatch.filter((text) => !statesWhenToUse(text))).toEqual([]);
+    expect(shouldNotMatch.filter((text) => statesWhenToUse(text))).toEqual([]);
+  });
+
+  it("checks a non-trivial share of the tree rather than a handful of files", () => {
+    expect(canonical.length).toBeGreaterThan(45);
+    expect(nonVendored.length).toBeGreaterThan(30);
+    // The exemptions must be live: if nothing were exempt, the rule below would be
+    // hiding a regression behind a filter that no longer matches anything.
+    expect(canonical.length - nonVendored.length).toBeGreaterThan(0);
+  });
+
+  it("every model-invocable, non-vendored skill states when to use it", () => {
+    const silent = nonVendored
+      .filter(({ data }) => !statesWhenToUse(String(data.description ?? "")))
+      .map(({ file }) => file.path);
+    expect(
+      silent,
+      "A skill the model can auto-select must state when to use it; a WHAT-only " +
+        "`description` makes routing a guess. Add a WHEN clause, or — if the skill " +
+        "is hash-locked vendored — record routing in registry.json instead.",
+    ).toEqual([]);
+  });
+
+  it("vendored skills that cannot state a trigger carry registry routing metadata instead", () => {
+    const exempt = canonical.filter(
+      ({ file, data }) =>
+        isVendoredSkillPath(file.path) && !statesWhenToUse(String(data.description ?? "")),
+    );
+    expect(
+      exempt.length,
+      "expected the frozen-description exemption to match the known vendored skills",
+    ).toBeGreaterThan(0);
+    const missing = exempt
+      .filter(({ file }) => {
+        const name = basename(dirname(join(REPO_ROOT, file.path)));
+        const entry = REGISTRY.skills[name];
+        return !entry || !(entry.modes ?? []).length || !(entry.do_not_use_for ?? []).length;
+      })
+      .map(({ file }) => file.path);
+    expect(
+      missing,
+      "A vendored skill whose upstream description carries no WHEN clause must still be " +
+        "routable, so registry.json needs non-empty `modes` and `do_not_use_for`.",
     ).toEqual([]);
   });
 });
