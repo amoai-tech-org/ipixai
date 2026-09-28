@@ -2,6 +2,42 @@
 
 Advanced configuration, styling, theming, and other powerful features for creating professional diagrams.
 
+## Contents
+
+- [Frontmatter Configuration](#frontmatter-configuration)
+- [Themes](#themes)
+  - [Built-in Themes](#built-in-themes)
+  - [Theme Examples](#theme-examples)
+- [Custom Theme Variables](#custom-theme-variables)
+- [Layout Options](#layout-options)
+  - [Dagre Layout (Default)](#dagre-layout-default)
+  - [ELK Layout (Advanced)](#elk-layout-advanced)
+- [Look Options](#look-options)
+  - [Classic Look](#classic-look)
+  - [Hand-Drawn Look](#hand-drawn-look)
+- [Complete Configuration Example](#complete-configuration-example)
+- [Diagram-Specific Styling](#diagram-specific-styling)
+  - [Flowchart Styling](#flowchart-styling)
+  - [Sequence Diagram Styling](#sequence-diagram-styling)
+  - [Class Diagram Styling](#class-diagram-styling)
+- [Directional Hints](#directional-hints)
+- [Click Events and Links](#click-events-and-links)
+- [Tooltips](#tooltips)
+- [Subgraph Styling](#subgraph-styling)
+- [Comments and Documentation](#comments-and-documentation)
+- [Complex Styling Example](#complex-styling-example)
+- [Responsive Sizing](#responsive-sizing)
+- [SVG Export Options](#svg-export-options)
+- [Best Practices for Advanced Features](#best-practices-for-advanced-features)
+- [Accessibility Considerations](#accessibility-considerations)
+- [Performance Considerations](#performance-considerations)
+- [Integration Examples](#integration-examples)
+  - [Markdown Files](#markdown-files)
+  - [HTML Files](#html-files)
+  - [React Components](#react-components)
+
+---
+
 ## Frontmatter Configuration
 
 Add YAML configuration at the top of diagrams:

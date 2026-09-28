@@ -1,5 +1,37 @@
 # Schema Design & Management
 
+## Contents
+
+- [Declarative Schema (Recommended)](#declarative-schema-recommended)
+  - [Directory Structure](#directory-structure)
+  - [Workflow](#workflow)
+  - [File Organization](#file-organization)
+  - [Caveats (Use Versioned Migrations Instead)](#caveats-use-versioned-migrations-instead)
+- [Schema Organization](#schema-organization)
+  - [Schemas](#schemas)
+- [Table Design Patterns](#table-design-patterns)
+  - [Primary Keys](#primary-keys)
+  - [Multi-Tenant Tables](#multi-tenant-tables)
+  - [Audit Fields](#audit-fields)
+  - [Join Tables (Many-to-Many)](#join-tables-many-to-many)
+- [Data Types](#data-types)
+  - [Timestamps](#timestamps)
+  - [JSON](#json)
+  - [Arrays vs. Normalized Tables](#arrays-vs-normalized-tables)
+  - [Enums](#enums)
+- [Foreign Keys](#foreign-keys)
+  - [Cascade Rules](#cascade-rules)
+  - [Naming Convention](#naming-convention)
+- [Indexes](#indexes)
+  - [Required Indexes](#required-indexes)
+  - [Composite Indexes](#composite-indexes)
+  - [Partial Indexes](#partial-indexes)
+  - [GIN Indexes](#gin-indexes)
+- [Constraints](#constraints)
+- [Table Comments](#table-comments)
+
+---
+
 ## Declarative Schema (Recommended)
 
 This project uses declarative schema management with the Supabase CLI.

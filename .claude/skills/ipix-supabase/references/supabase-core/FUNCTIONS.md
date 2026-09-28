@@ -1,5 +1,27 @@
 # Database Functions
 
+## Contents
+
+- [Core Rules](#core-rules)
+- [Security Modes](#security-modes)
+  - [SECURITY INVOKER (Default)](#security-invoker-default)
+  - [SECURITY DEFINER](#security-definer)
+- [Volatility Categories](#volatility-categories)
+  - [IMMUTABLE](#immutable)
+  - [STABLE](#stable)
+  - [VOLATILE (Default)](#volatile-default)
+- [Function Templates](#function-templates)
+  - [Simple Query Function](#simple-query-function)
+  - [Function with Parameters](#function-with-parameters)
+  - [Function with Error Handling](#function-with-error-handling)
+  - [Trigger Function](#trigger-function)
+  - [Function Returning JSON](#function-returning-json)
+  - [RPC Function for Complex Operations](#rpc-function-for-complex-operations)
+- [Auth Helper Functions](#auth-helper-functions)
+- [Best Practices](#best-practices)
+
+---
+
 ## Core Rules
 
 1. **Default to `security invoker`** - Functions run as calling user

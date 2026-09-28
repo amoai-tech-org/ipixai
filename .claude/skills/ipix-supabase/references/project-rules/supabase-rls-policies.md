@@ -37,6 +37,28 @@ WITH CHECK ((select auth.uid()) = author_id);
 
 Since you are running in a Supabase environment, take note of these Supabase-specific additions below.
 
+## Contents
+
+- [iPix verification contract](#ipix-verification-contract)
+- [Authenticated and unauthenticated roles](#authenticated-and-unauthenticated-roles)
+  - [Incorrect](#incorrect)
+  - [Correct](#correct)
+- [Multiple operations](#multiple-operations)
+  - [Incorrect](#incorrect-1)
+  - [Correct](#correct-1)
+- [Helper functions](#helper-functions)
+  - [`auth.uid()`](#authuid)
+  - [`auth.jwt()`](#authjwt)
+  - [MFA](#mfa)
+- [RLS performance recommendations](#rls-performance-recommendations)
+  - [Add indexes](#add-indexes)
+  - [Call functions with `select`](#call-functions-with-select)
+  - [Minimize joins](#minimize-joins)
+  - [Specify roles in your policies](#specify-roles-in-your-policies)
+- [iPix lesson learned — a bulk-access policy doesn't cover "read your own row" (IPI-536/PR #347)](#ipix-lesson-learned--a-bulk-access-policy-doesnt-cover-read-your-own-row-ipi-536pr-347)
+
+---
+
 ## iPix verification contract
 
 - Retrieve the current table schema, existing policies, grants, and helper-function definitions before editing policy logic.

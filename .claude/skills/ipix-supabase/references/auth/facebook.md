@@ -14,6 +14,28 @@ Add Facebook OAuth to your Supabase project
 
 To enable Facebook Auth for your project, you need to set up a Facebook OAuth application and add the application credentials to your Supabase Dashboard.
 
+## Contents
+
+- [Overview](#overview)
+- [Access your Facebook Developer account](#access-your-facebook-developer-account)
+- [Create a Facebook app](#create-a-facebook-app)
+- [Set up Facebook login for your Facebook app](#set-up-facebook-login-for-your-facebook-app)
+- [Configure email permissions (required)](#configure-email-permissions-required)
+- [Copy your Facebook app ID and secret](#copy-your-facebook-app-id-and-secret)
+- [Enter your Facebook app ID and secret into your Supabase project](#enter-your-facebook-app-id-and-secret-into-your-supabase-project)
+- [Add login code to your client app](#add-login-code-to-your-client-app)
+  - [Alternative: Using Facebook SDK with signInWithIdToken](#alternative-using-facebook-sdk-with-signinwithidtoken)
+- [Testing your integration](#testing-your-integration)
+- [Going live with app review](#going-live-with-app-review)
+- [Troubleshooting](#troubleshooting)
+  - ["App not setup" error](#app-not-setup-error)
+  - [User's email not returned](#users-email-not-returned)
+  - ["Redirect URI mismatch" error](#redirect-uri-mismatch-error)
+  - [Login works in development but not production](#login-works-in-development-but-not-production)
+- [Resources](#resources)
+
+---
+
 ## Overview
 
 Setting up Facebook logins for your application consists of 4 parts:

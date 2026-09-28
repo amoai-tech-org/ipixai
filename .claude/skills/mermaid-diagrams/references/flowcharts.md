@@ -2,6 +2,50 @@
 
 Flowcharts visualize processes, algorithms, decision trees, and user journeys. They show step-by-step progression through a system or workflow.
 
+## Contents
+
+- [Basic Syntax](#basic-syntax)
+- [Node Shapes](#node-shapes)
+  - [Rectangle (default)](#rectangle-default)
+  - [Rounded Rectangle](#rounded-rectangle)
+  - [Stadium/Pill Shape](#stadiumpill-shape)
+  - [Subroutine (Double Border)](#subroutine-double-border)
+  - [Cylindrical (Database)](#cylindrical-database)
+  - [Circle](#circle)
+  - [Asymmetric/Flag](#asymmetricflag)
+  - [Rhombus (Decision)](#rhombus-decision)
+  - [Hexagon](#hexagon)
+  - [Parallelogram (Input/Output)](#parallelogram-inputoutput)
+  - [Trapezoid](#trapezoid)
+- [Connections](#connections)
+  - [Basic Arrow](#basic-arrow)
+  - [Open Link (No Arrow)](#open-link-no-arrow)
+  - [Text on Links](#text-on-links)
+  - [Dotted Links](#dotted-links)
+  - [Thick Links](#thick-links)
+  - [Chaining](#chaining)
+  - [Multi-directional](#multi-directional)
+- [Subgraphs](#subgraphs)
+  - [Nested Subgraphs](#nested-subgraphs)
+  - [Subgraph Direction](#subgraph-direction)
+- [Styling](#styling)
+  - [Individual Node Styling](#individual-node-styling)
+  - [Class-based Styling](#class-based-styling)
+  - [Link Styling](#link-styling)
+- [Comprehensive Example: User Registration Flow](#comprehensive-example-user-registration-flow)
+- [Algorithm Example: Binary Search](#algorithm-example-binary-search)
+- [CI/CD Pipeline](#cicd-pipeline)
+- [E-Commerce Checkout Flow](#e-commerce-checkout-flow)
+- [Decision Matrix Example](#decision-matrix-example)
+- [Best Practices](#best-practices)
+- [Common Patterns](#common-patterns)
+  - [Simple Linear Flow](#simple-linear-flow)
+  - [Branching Decision](#branching-decision)
+  - [Loop Pattern](#loop-pattern)
+  - [Error Handling](#error-handling)
+
+---
+
 ## Basic Syntax
 
 ```mermaid

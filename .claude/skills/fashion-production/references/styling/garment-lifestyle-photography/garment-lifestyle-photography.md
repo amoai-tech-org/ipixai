@@ -10,6 +10,22 @@ metadata:
 
 # Garment Lifestyle Photography — Location Shoot Briefs
 
+## Contents
+
+- [When to Use This Skill](#when-to-use-this-skill)
+- [Core Principle](#core-principle)
+- [Lifestyle Contexts (5 Types)](#lifestyle-contexts-5-types)
+  - [Context 1: Urban](#context-1-urban)
+  - [Context 2: Casual](#context-2-casual)
+  - [Context 3: Active](#context-3-active)
+  - [Context 4: Professional](#context-4-professional)
+  - [Context 5: Social](#context-5-social)
+- [Weather Contingency Plans](#weather-contingency-plans)
+- [Location Release Template](#location-release-template)
+- [Validation](#validation)
+
+---
+
 ## When to Use This Skill
 
 Use when you need to:

@@ -20,6 +20,15 @@ if not Path('graphify-out/graph.json').exists():
 ```
 If it fails, stop and tell the user to run `/graphify <path>` first.
 
+## Contents
+
+  - [Step 0 — Constrained query expansion (REQUIRED before traversal)](#step-0--constrained-query-expansion-required-before-traversal)
+  - [Step 1 — Traversal](#step-1--traversal)
+- [For /graphify path](#for-graphify-path)
+- [For /graphify explain](#for-graphify-explain)
+
+---
+
 ### Step 0 — Constrained query expansion (REQUIRED before traversal)
 
 graphify's `query` CLI matches nodes via case-folded substring + IDF — there is **no stemming, no synonyms, no cross-language match** inside the binary, and the inline fallback below matches the same way. If the user's question uses different language or different domain vocabulary than the graph's labels (user says "обработчик" / graph says "handler"; user says "authentication" / graph says "Guardian"), the literal matcher returns 0 hits and the answer collapses to noise.

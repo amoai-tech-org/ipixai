@@ -3,8 +3,8 @@
 ## Contents
 
 - [Python (Self-Hosted FastAPI)](#python-self-hosted-fastapi)
-- [Python (LangGraph Platform / Monorepo)](#python-langgraph-platform-monorepo)
-- [JavaScript / TypeScript](#javascript-typescript)
+- [Python (LangGraph Platform / Monorepo)](#python-langgraph-platform--monorepo)
+- [JavaScript / TypeScript](#javascript--typescript)
 - [Monorepo Structure (JS)](#monorepo-structure-js)
 
 

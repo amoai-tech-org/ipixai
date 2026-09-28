@@ -10,6 +10,22 @@ metadata:
 
 # Product Photography — Photographer Brief Specs
 
+## Contents
+
+- [When to Use This Skill](#when-to-use-this-skill)
+- [Core Principle](#core-principle)
+- [The 5 Product Shot Types](#the-5-product-shot-types)
+  - [Type 1: Clean Product Shot](#type-1-clean-product-shot)
+  - [Type 2: Lifestyle Shot](#type-2-lifestyle-shot)
+  - [Type 3: Hero Shot](#type-3-hero-shot)
+  - [Type 4: Detail Shot](#type-4-detail-shot)
+  - [Type 5: Flat Lay](#type-5-flat-lay)
+- [Brand DNA → Product Shot Translation](#brand-dna--product-shot-translation)
+- [Channel Export Requirements](#channel-export-requirements)
+- [Validation](#validation)
+
+---
+
 ## When to Use This Skill
 
 Use when you need to:

@@ -11,6 +11,33 @@ Plan / generate / heal lean on the same mechanic: run `npx playwright test --deb
 
 ---
 
+## Contents
+
+- [0. How generation works](#0-how-generation-works)
+  - [Building a test file](#building-a-test-file)
+  - [Use semantic locators](#use-semantic-locators)
+  - [Explore before recording](#explore-before-recording)
+  - [Add assertions manually](#add-assertions-manually)
+- [1. Planning](#1-planning)
+  - [1.1 Prerequisite: workspace](#11-prerequisite-workspace)
+  - [1.2 Prerequisite: seed test](#12-prerequisite-seed-test)
+  - [1.3 Explore the app](#13-explore-the-app)
+  - [1.4 Write the spec file](#14-write-the-spec-file)
+- [2. Generate](#2-generate)
+  - [2.1 Inputs](#21-inputs)
+  - [2.2 Generate one scenario](#22-generate-one-scenario)
+  - [2.3 Generate multiple scenarios](#23-generate-multiple-scenarios)
+  - [2.4 Run generated tests](#24-run-generated-tests)
+- [3. Heal](#3-heal)
+  - [3.1 Find failing tests](#31-find-failing-tests)
+  - [3.2 Debug one failure](#32-debug-one-failure)
+  - [3.3 Apply the fix](#33-apply-the-fix)
+  - [3.4 Reconcile with the spec](#34-reconcile-with-the-spec)
+  - [3.5 Iteration and giving up](#35-iteration-and-giving-up)
+- [Cross-references](#cross-references)
+
+---
+
 ## 0. How generation works
 
 Every action you perform with `playwright-cli` generates corresponding Playwright TypeScript code. This code appears in the output and can be copied directly into your test files.

@@ -11,6 +11,18 @@ keywords: mastra, journeys, frontend, backend, copilotkit, ag-ui, workflows, hit
 
 A Mastra feature is not production-ready because an agent answers or a tool unit test passes. Verify the real operator outcome across every layer the journey touches.
 
+## Contents
+
+- [Core journey model](#core-journey-model)
+- [J1 — Production Planner chat → real planning tool → visible result → reload](#j1--production-planner-chat--real-planning-tool--visible-result--reload)
+- [J2 — Planner missing/ambiguous input → ask instead of invent](#j2--planner-missingambiguous-input--ask-instead-of-invent)
+- [J3 — Same-org continuity + cross-org denial](#j3--same-org-continuity--cross-org-denial)
+- [J4 — Structured shoot plan → operator review/edit → exact approval → single save](#j4--structured-shoot-plan--operator-reviewedit--exact-approval--single-save)
+- [J5 — Brand URL → evidence → draft Brand DNA → review → atomic promotion](#j5--brand-url--evidence--draft-brand-dna--review--atomic-promotion)
+- [J6 — Approved assets → campaign content/publishing](#j6--approved-assets--campaign-contentpublishing)
+
+---
+
 ## Core journey model
 
 ```text

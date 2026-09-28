@@ -1,5 +1,28 @@
 # Row Level Security (RLS) Policies
 
+## Contents
+
+- [Core Rules](#core-rules)
+- [Policy Syntax](#policy-syntax)
+- [Helper Functions](#helper-functions)
+  - [auth.uid()](#authuid)
+  - [auth.jwt()](#authjwt)
+  - [Custom Helper Functions](#custom-helper-functions)
+- [Common Policy Patterns](#common-policy-patterns)
+  - [Organization Isolation](#organization-isolation)
+  - [Owner-Only Access](#owner-only-access)
+  - [Role-Based Access](#role-based-access)
+  - [Public Read Access](#public-read-access)
+  - [MFA Requirement](#mfa-requirement)
+- [Performance Recommendations](#performance-recommendations)
+  - [Add Indexes](#add-indexes)
+  - [Wrap Functions in SELECT](#wrap-functions-in-select)
+  - [Avoid Joins in Policies](#avoid-joins-in-policies)
+  - [Always Specify Roles](#always-specify-roles)
+- [Permissive vs Restrictive](#permissive-vs-restrictive)
+
+---
+
 ## Core Rules
 
 1. **Always enable RLS** - Even for public tables
