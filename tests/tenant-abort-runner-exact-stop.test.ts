@@ -9,6 +9,7 @@ import type { BaseEvent, RunAgentInput } from "@ag-ui/client";
 import { InMemoryAgentRunner } from "@copilotkit/runtime/v2";
 import { Observable } from "rxjs";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { PlannerRunControl } from "@/lib/copilotkit/planner-run-control";
 
 let releaseMemory: () => void = () => {};
 let memoryGate: Promise<void> = Promise.resolve();
@@ -336,5 +337,72 @@ describe("IPI-1290 TenantAbortRunner exact-run Stop", () => {
     expect(await other.stop({ threadId, runId: "R2" })).toBe(false);
     await r2.done;
     expect(r2.events.map((e) => e.type)).toContain(EventType.RUN_FINISHED);
+  });
+
+  it("falls back to remote probe and exact Stop when this process does not own the run", async () => {
+    const remote = {
+      isRunning: vi.fn(async () => true),
+      stop: vi.fn(async (_threadId: string, runId: string) => ({
+        kind: "stop_ack" as const,
+        requestId: "q1",
+        runId,
+        stopped: true,
+        ownerInstanceId: "runtime-a",
+      })),
+    } as unknown as PlannerRunControl;
+    const runner = new TenantAbortRunner(RESOURCE, new AbortController().signal, remote);
+
+    expect(await runner.isRunning({ threadId: "remote-thread" })).toBe(true);
+    expect(await runner.stop({ threadId: "remote-thread", runId: "R1" })).toBe(true);
+    expect(remote.isRunning).toHaveBeenCalledWith("remote-thread");
+    expect(remote.stop).toHaveBeenCalledWith("remote-thread", "R1");
+  });
+
+  it("relays new live events from a remote owner instead of falling back to durable history", async () => {
+    const close = vi.fn(async () => {});
+    const remote = {
+      connect: vi.fn(async () => ({
+        runId: "R1",
+        ownerInstanceId: "runtime-a",
+        onEvent(handler: (event: BaseEvent) => void) {
+          const timer = setTimeout(() => {
+            handler({ type: EventType.RUN_STARTED, threadId: "remote-thread", runId: "R1" } as BaseEvent);
+            handler({ type: EventType.RUN_FINISHED, threadId: "remote-thread", runId: "R1" } as BaseEvent);
+          }, 0);
+          return () => clearTimeout(timer);
+        },
+        close,
+      })),
+    } as unknown as PlannerRunControl;
+    const runner = new TenantAbortRunner(RESOURCE, new AbortController().signal, remote);
+
+    const connected = collect(runner.connect({ threadId: "remote-thread" }));
+    await connected.done;
+    expect(connected.events.map((event) => event.type)).toEqual([
+      EventType.RUN_STARTED,
+      EventType.RUN_FINISHED,
+    ]);
+    expect(remote.connect).toHaveBeenCalledWith("remote-thread");
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("registers the local owner before the model runs and publishes live events for remote listeners", async () => {
+    const publish = vi.fn(async (_event: BaseEvent) => {});
+    const close = vi.fn(async () => {});
+    const own = vi.fn(async () => ({ publish, close }));
+    const control = { own } as unknown as PlannerRunControl;
+    const threadId = nextThread();
+    const runner = new TenantAbortRunner(RESOURCE, new AbortController().signal, control);
+
+    const run = collect(
+      runner.run({ threadId, agent: wrapAbortRun(new SlowAgent()), input: input(threadId, "R1") }),
+    );
+    await run.done;
+
+    expect(own).toHaveBeenCalledWith(threadId, "R1", expect.any(Function));
+    expect(publish.mock.calls.map(([event]) => event.type)).toEqual(
+      expect.arrayContaining([EventType.RUN_STARTED, EventType.RUN_FINISHED]),
+    );
+    expect(close).toHaveBeenCalled();
   });
 });

@@ -13,6 +13,7 @@ import {
   attachRunnerAbort,
   TenantAbortRunner,
 } from "@/lib/copilotkit/tenant-abort-runner";
+import { createPlannerRunControl } from "@/lib/copilotkit/planner-run-control-supabase";
 
 // IPI-1329 · MASTRA-INPROC-001 — the Product Planner always runs in this
 // process: server-derived org+user resourceId → createLocalAgents →
@@ -43,7 +44,11 @@ async function handleCopilot(request: Request) {
   const runtime = new CopilotRuntime({
     agents: attachRunnerAbort(createLocalAgents(resourceId)),
     identifyUser: identifyOperator,
-    runner: new TenantAbortRunner(resourceId, request.signal),
+    runner: new TenantAbortRunner(
+      resourceId,
+      request.signal,
+      createPlannerRunControl(resourceId, accessToken),
+    ),
     ...(licenseToken ? { licenseToken } : {}),
   });
 
