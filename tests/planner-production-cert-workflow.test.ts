@@ -11,9 +11,12 @@ import { parse } from "yaml";
 
 type WorkflowStep = {
   name?: string;
+  id?: string;
+  if?: string;
   run?: string;
   uses?: string;
   env?: Record<string, unknown>;
+  with?: Record<string, unknown>;
 };
 
 type WorkflowJob = {
@@ -79,9 +82,36 @@ describe("production Planner certification workflow", () => {
 
     expect(checkout.uses).toContain("actions/checkout@");
     expect(checkout.env).toBeUndefined();
-    const ref = (checkout as unknown as { with?: Record<string, string> }).with?.ref;
-    expect(ref).toContain("steps.request.outputs.expected_sha");
-    expect(ref).not.toBe("main");
+    expect(checkout.with?.ref).toContain("steps.request.outputs.expected_sha");
+    expect(checkout.with?.ref).not.toBe("main");
+  });
+
+  // Review finding: nothing asserted that the verifying step actually publishes
+  // the outputs its later steps read, so a break there would silently skip the
+  // 5xx check (`if: steps.prod.outputs.deployment_url != ''`) and blank the
+  // summary. Step outputs are written through `$GITHUB_OUTPUT` — a step cannot
+  // declare them in YAML — so assert the writes and the consumption wiring.
+  it("publishes the deployment outputs its later steps consume", () => {
+    const { workflow } = readWorkflow(CERT_WORKFLOW);
+    const job = jobOf(workflow, "certify");
+    const prod = stepNamed(job, "Assert Production serves");
+
+    expect(prod.id, "later steps reference steps.prod.outputs").toBe("prod");
+
+    const prodCommands = commandLines(prod.run).join("\n");
+    for (const output of ["deployment_url", "deployment_sha"]) {
+      expect(prodCommands, `${output} must be written to GITHUB_OUTPUT`).toContain(
+        `GITHUB_OUTPUT, \`${output}=`,
+      );
+    }
+
+    const logStep = stepNamed(job, "Assert no unexpected");
+    expect(logStep.if).toContain("steps.prod.outputs.deployment_url");
+    expect(String(logStep.env?.DEPLOYMENT_URL)).toContain("steps.prod.outputs.deployment_url");
+
+    const summary = stepNamed(job, "Certification summary");
+    expect(summary.run).toContain("steps.prod.outputs.deployment_url");
+    expect(summary.run).toContain("steps.prod.outputs.deployment_sha");
   });
 
   // Review finding: `|| true` turned a failed log query into a passing 5xx check.
