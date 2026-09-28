@@ -21,6 +21,7 @@ type WorkflowStep = {
 
 type WorkflowJob = {
   if?: string;
+  env?: Record<string, unknown>;
   steps?: WorkflowStep[];
 };
 
@@ -45,12 +46,32 @@ function stepNamed(job: WorkflowJob, prefix: string): WorkflowStep {
   return step;
 }
 
-/** Only the executable lines, so a comment that mentions a pattern cannot satisfy a check. */
+/**
+ * Only the executable lines, so a comment that mentions a pattern cannot satisfy
+ * a check. Backslash continuations are joined, so a command split over several
+ * physical lines is asserted as the single command the shell actually runs —
+ * otherwise only its first line carries the program name and the rest look like
+ * unrelated lines.
+ */
 function commandLines(run: string | undefined): string[] {
-  return (run ?? "")
+  const lines = (run ?? "")
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "" && !line.startsWith("#"));
+
+  const joined: string[] = [];
+  let pending: string | null = null;
+  for (const line of lines) {
+    const continues = line.endsWith("\\");
+    const body = continues ? line.slice(0, -1).trim() : line;
+    pending = pending === null ? body : `${pending} ${body}`;
+    if (!continues) {
+      joined.push(pending);
+      pending = null;
+    }
+  }
+  if (pending !== null) joined.push(pending);
+  return joined;
 }
 
 const CERT_WORKFLOW = ".github/workflows/production-planner-cert.yml";
@@ -126,6 +147,76 @@ describe("production Planner certification workflow", () => {
     expect(logLines[0], "the 100-line default truncates the window").toContain("--limit");
 
     expect(commands.join("\n")).toContain("scripts/check-planner-production-logs.mjs");
+  });
+
+  // `vercel logs` applies --since/--until to the newest --limit entries rather
+  // than streaming a range, so an unbounded query scans "whatever the newest log
+  // lines happen to be". Measured 2026-09-28: `--limit 50` returned 50 entries
+  // and `--limit 5000` returned 5000 for the same requested range, so the limit
+  // silently decides how much real time is covered.
+  it("bounds the scanned window to the journey instead of whatever is newest", () => {
+    const { workflow } = readWorkflow(CERT_WORKFLOW);
+    const job = jobOf(workflow, "certify");
+
+    const journeyCommands = commandLines(
+      stepNamed(job, "Run the signed-in Production Planner certification").run,
+    );
+    const windowWrite = journeyCommands.find((line) => line.includes("CERT_STARTED_AT"));
+    expect(windowWrite, "the certification window start must be recorded").toBeDefined();
+    // $GITHUB_ENV, not $GITHUB_OUTPUT: the log step runs with `if: always()`,
+    // including when the journey step itself fails.
+    expect(String(windowWrite)).toContain("GITHUB_ENV");
+    expect(
+      journeyCommands.indexOf(String(windowWrite)),
+      "the window must start before the journey runs",
+    ).toBeLessThan(journeyCommands.findIndex((line) => line.includes("e2e:production-cert")));
+
+    const logStep = stepNamed(job, "Assert no unexpected");
+    const logLines = commandLines(logStep.run).filter((line) => line.includes("vercel logs"));
+    expect(logLines[0]).toContain('--since "$CERT_STARTED_AT"');
+    expect(logLines[0], "an open-ended window widens past the journey").toContain("--until");
+
+    // The same limit reaches the checker, which reports reaching it: a truncated
+    // scan drops the OLDEST entries, so the volume is evidence rather than a
+    // failure — the thread-id guard is what proves the journey is in the window.
+    expect(String(logStep.env?.PROD_LOG_LIMIT)).toMatch(/^\d+$/);
+    expect(logLines[0]).toContain('--limit "$PROD_LOG_LIMIT"');
+  });
+
+  it("refuses to check logs when the certification window is unknown", () => {
+    const { workflow } = readWorkflow(CERT_WORKFLOW);
+    const commands = commandLines(
+      stepNamed(jobOf(workflow, "certify"), "Assert no unexpected").run,
+    );
+
+    const guard = commands.find((line) => line.includes("CERT_STARTED_AT"));
+    expect(guard, "the step must guard the window start").toBeDefined();
+    expect(String(guard)).toContain(":-");
+    expect(commands.join("\n")).toContain("exit 1");
+    // Guarded before the query, so an unset window cannot reach `vercel logs`.
+    expect(commands.indexOf(String(guard))).toBeLessThan(
+      commands.findIndex((line) => line.includes("vercel logs")),
+    );
+  });
+
+  // Production is live, so /api/copilotkit traffic exists whether or not this
+  // journey ran (measured: ~1100 requests in a 30-second slice against this
+  // journey's 11). Only the journey's own thread id ties the scanned window to
+  // the certification, so the trace must be configured for the whole job.
+  it("ties the log check to this certification's own thread, not to copilotkit traffic", () => {
+    const { workflow } = readWorkflow(CERT_WORKFLOW);
+    const job = jobOf(workflow, "certify");
+
+    expect(
+      String(job.env?.CERT_TRACE_FILE),
+      "the job must publish a trace the log check can read",
+    ).toContain("planner-cert-trace.json");
+
+    // The journey writes it and the check reads it, in the same job.
+    expect(stepNamed(job, "Run the signed-in Production Planner certification").run).toBeDefined();
+    expect(commandLines(stepNamed(job, "Assert no unexpected").run).join("\n")).toContain(
+      "scripts/check-planner-production-logs.mjs",
+    );
   });
 
   it("requires the certified SHA to be a released commit on main", () => {
