@@ -156,16 +156,13 @@ describe("iPix engineering skill contracts", () => {
     expect(syncSection).toMatch(
       /\`N 0\` or \`N M\`[\s\S]*\*\*STOP\*\*[\s\S]*Preserve those local-only commits[\s\S]*never silently reset or discard them/,
     );
-    expect(syncSection).toContain("\`0 0\` \u2192 PASS");
+    expect(syncSection).toContain("\`0 0\` → PASS");
     expect(syncSection).toContain("Do not automatically rebase active feature branches");
     expect(tasks).toContain("Post-merge local-main synchronization");
-    expect(agents).toContain("synchronize local \`main\` with \`origin/main\`");
+    expect(agents).toContain("synchronize local `main` with `origin/main`");
   });
 
   test("durable records are updated in the same PR, and stale ones are corrected with the change", () => {
-    // Structural anchors: the Done gate must keep all three durable-record
-    // decisions and the changelog bullet must stay explicit that the entry ships
-    // with the change rather than as a follow-up.
     expect(tasks).toContain("docs/**` in the same PR");
     expect(tasks).toContain("update `changelog.md` **in the same PR**");
     expect(tasks).toContain("The post-merge pass is the fallback for a genuine miss, never the plan");
@@ -179,10 +176,6 @@ describe("iPix engineering skill contracts", () => {
   });
 
   test("pre-merge guidance requires running contract tests after editing a file they read", () => {
-    // Match the headings as complete lines so a passing mention in prose cannot
-    // satisfy the anchor, and prove the closing boundary exists BEFORE slicing:
-    // `indexOf` returning -1 would slice to the end of the file and let every
-    // assertion below pass against unrelated content.
     const sectionStart = preMergeTests.search(/^## Documentation files are under test$/m);
     const sectionEnd = preMergeTests.search(/^## iPix path\/risk matrix$/m);
 
@@ -215,9 +208,9 @@ describe("iPix engineering skill contracts", () => {
     expect(changelog).toContain("notable verified");
     expect(changelog).toContain("IPI-1294");
     expect(changelog).toContain("four-template routing");
-    expect(todo).toContain("full canonical external-reference contract");
-    expect(todo).toContain("Live template inventory is exactly four");
-    expect(todo).toContain("Linear Reviews/Diffs does not currently discover `amoai-tech/ipixai`");
+    // Retired with the post-merge records: these assertions pinned transient
+    // IPI-1294 handoff prose. Durable history belongs in Linear/changelog;
+    // todo.md must remain free to describe the current handoff.
     expect(todo).not.toContain("synchronize/retire live Linear template definitions");
   });
 

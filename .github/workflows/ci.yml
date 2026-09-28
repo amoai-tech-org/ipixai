@@ -381,6 +381,89 @@ jobs:
       - run: npm ci
       - run: npx vitest run tests/access-claim-001.test.ts
 
+  # IPI-1050 · MEM-001 — Planner prior-message history survives a REAL process
+  # restart. Unlike the unit proof in tests/mem-001-message-history.test.ts (which
+  # proves the message-history -> model-prompt contract on Mastra's in-memory
+  # store), this job needs a durable store two separate OS processes can share.
+  # The schema comes from the same pinned migrations Production uses, applied in
+  # timestamp order, so `PostgresStore({ disableInit: true })` finds a real
+  # `mastra` schema and the proof needs no DDL of its own.
+  mem-001-restart-history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      postgres:
+        # Same reviewed postgres 17 digest as plans-001-read-contract-acl; a
+        # mutable tag is rejected on jobs that assert schema behaviour.
+        image: postgres@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # 127.0.0.1 with a non-Supabase login role is the documented local path
+      # (src/mastra/pg-store.ts allowlist). IPIX_MASTRA_HOSTED stays unset so the
+      # guard still refuses in-memory fallback for real hosted runtimes.
+      MASTRA_DATABASE_URL: postgres://hyperdrive_mastra_runtime:runtime@127.0.0.1:5432/postgres
+      COPILOTKIT_TELEMETRY_DISABLED: "true"
+      # The Planner's model is swapped for a recording mock before any call, so
+      # no provider request is made. A placeholder keeps construction honest
+      # (same convention as `build` and `claim-concurrency`) instead of relying
+      # on an unset key.
+      OPENAI_API_KEY: placeholder
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Provision the pinned mastra schema and the runtime role
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          do $roles$
+          begin
+            if not exists (select 1 from pg_roles where rolname = 'anon') then
+              create role anon nologin;
+            end if;
+            if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+              create role authenticated nologin;
+            end if;
+            if not exists (select 1 from pg_roles where rolname = 'service_role') then
+              create role service_role nologin;
+            end if;
+            -- Login role: this job connects AS it, so unlike the ACL jobs a
+            -- nologin role would not exercise the real runtime path.
+            if not exists (select 1 from pg_roles where rolname = 'hyperdrive_mastra_runtime') then
+              create role hyperdrive_mastra_runtime login password 'runtime' nosuperuser;
+            end if;
+          end
+          $roles$;
+          SQL
+          # Timestamp order matters: the grants/RLS migration must see the core
+          # tables, and the 1.71 delta's postflight asserts RLS is already on.
+          for migration in \
+            supabase/migrations/20260722093028_mastra_schema_pinned_1_12_0.sql \
+            supabase/migrations/20260722094055_mastra_runtime_grants_and_rls.sql \
+            supabase/migrations/20260822070000_ipi1008_mastra_workflow_definitions.sql \
+            supabase/migrations/20260927194500_ipi1332_mastra_1_71_schema_delta.sql ; do
+            echo "applying $migration"
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - run: npm ci
+      - name: Prior message history reaches the next Planner model call after a real restart
+        run: npx tsx scripts/mem-001-restart-proof.mjs
+
   # IPI-1111 · CLD-WEBHOOK-001 — RPC state-machine SQL fixture (idempotency / tenant).
   cloudinary-webhook-rpc:
     runs-on: ubuntu-latest
@@ -842,6 +925,7 @@ jobs:
       - media-harden-acl
       - plans-001-read-contract-acl
       - claim-concurrency
+      - mem-001-restart-history
       - cloudinary-webhook-rpc
       - sb-sec-010-acl
       - block-brand-org-change-acl
